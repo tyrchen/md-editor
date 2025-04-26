@@ -17,16 +17,19 @@ use crate::{Document, Node, Position, Selection};
 ///
 /// # Example
 /// ```
+/// # use md_core::{Document, Editor, EditError};
+/// # fn example() -> Result<(), EditError> {
+/// # let doc = Document::new();
+/// # let mut editor = Editor::new(doc);
 /// let mut transaction = editor.begin_transaction();
 /// transaction
 ///     .insert_heading(0, 1, "Document Title")
 ///     .insert_paragraph(1, "First paragraph");
 ///
-/// // Commit the transaction to get the commands
-/// let commands = transaction.commit()?;
-///
-/// // Execute the commands on the editor
-/// editor.execute_transaction_commands(commands)?;
+/// // Execute the transaction on the editor
+/// editor.execute_transaction(transaction)?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// Transactions are automatically rolled back if they are dropped without being committed,

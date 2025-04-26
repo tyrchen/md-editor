@@ -1,5 +1,5 @@
 use super::DocumentBuilder;
-use crate::{Document, DocumentMetadata, Node, TableAlignment};
+use crate::{Document, DocumentMetadata, Markdown, Node, ParseError, TableAlignment, Text};
 
 impl DocumentBuilder {
     /// Creates a new document builder
@@ -7,6 +7,13 @@ impl DocumentBuilder {
         Self {
             document: Document::new(),
         }
+    }
+
+    /// Creates a new document builder from a markdown string
+    pub fn from_markdown(markdown: impl Into<String>) -> Result<Self, ParseError> {
+        let text = Text::<Markdown>::new(markdown);
+        let document = Document::try_from(text)?;
+        Ok(Self { document })
     }
 
     /// Sets a title for the document, creating a title heading

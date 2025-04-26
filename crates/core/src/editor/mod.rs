@@ -697,53 +697,41 @@ impl Editor {
     ///
     /// # Example
     /// ```
+    /// # use md_core::{Document, Editor, EditError};
+    /// # fn example() -> Result<(), EditError> {
+    /// # let doc = Document::new();
+    /// # let mut editor = Editor::new(doc);
     /// let mut transaction = editor.begin_transaction();
     /// transaction.insert_text(0, 0, "Hello");
-    /// let commands = transaction.commit()?;
-    /// editor.execute_transaction_commands(commands)?;
+    /// editor.execute_transaction(transaction)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn begin_transaction(&self) -> Transaction {
         Transaction::new(self.document.clone())
     }
 
-    /// Execute a transaction with a provided closure that builds the transaction and returns
-    /// a result along with the transaction.
+    /// Execute a transaction with a provided closure that builds the transaction.
     ///
     /// # Example
     /// ```
-    /// let count = editor.with_transaction(|transaction| {
-    ///     let transaction = transaction.insert_text(0, 0, "Hello");
-    ///     Ok((transaction, 1)) // Return transaction and a value
-    /// })?;
-    /// ```
-    pub fn with_transaction<F, R>(&mut self, transaction_builder: F) -> Result<R, EditError>
-    where
-        F: FnOnce(Transaction) -> Result<(Transaction, R), EditError>,
-    {
-        // Create a new transaction
-        let transaction = Transaction::new(self.document.clone());
-
-        // Let the closure build the transaction and produce a result
-        let (transaction, result) = transaction_builder(transaction)?;
-
-        // Execute the transaction
-        self.execute_transaction(transaction)?;
-
-        // Return the result from the closure
-        Ok(result)
-    }
-
-    /// Execute a simple transaction with a provided closure that builds the transaction.
-    ///
-    /// # Example
-    /// ```
-    /// editor.with_simple_transaction(|transaction| {
+    /// # use md_core::{Document, Editor, TextFormatting, EditError};
+    /// # fn example() -> Result<(), EditError> {
+    /// # let doc = Document::new();
+    /// # let mut editor = Editor::new(doc);
+    /// editor.with_transaction(|mut transaction| {
     ///     transaction
     ///         .insert_text(0, 0, "Hello")
-    ///         .format_text(0, 0, 5, TextFormatting::bold())
+    ///         .format_text(0, 0, 5, TextFormatting {
+    ///             bold: true,
+    ///             ..Default::default()
+    ///         });
+    ///     transaction
     /// })?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn with_simple_transaction<F>(&mut self, transaction_builder: F) -> Result<(), EditError>
+    pub fn with_transaction<F>(&mut self, transaction_builder: F) -> Result<(), EditError>
     where
         F: FnOnce(Transaction) -> Transaction,
     {

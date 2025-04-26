@@ -93,14 +93,15 @@ doc.collapse_selection_to_start();
 ## Transaction API Example
 
 ```rust
-use md_core::{Document, Editor, TextFormatting};
+use md_core::{Document, Editor, TextFormatting, EditError};
 
 // Create a document
 let doc = Document::new();
 let mut editor = Editor::new(doc);
 
 // Start a transaction for grouping multiple operations
-let transaction = editor.begin_transaction()
+let mut transaction = editor.begin_transaction();
+transaction
     .insert_heading(0, 1, "Transaction Example")
     .insert_paragraph(1, "This paragraph is added atomically with the heading.")
     .select_text_range(1, 5, 14)
@@ -109,7 +110,7 @@ let transaction = editor.begin_transaction()
         ..Default::default()
     });
 
-// Commit the transaction - all operations succeed or fail together
+// Execute the transaction - all operations succeed or fail together
 editor.execute_transaction(transaction).unwrap();
 
 // Undo all operations in one step
