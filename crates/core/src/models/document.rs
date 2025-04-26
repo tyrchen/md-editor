@@ -74,6 +74,13 @@ impl Document {
         index
     }
 
+    /// Adds a paragraph with custom inline nodes to the document
+    pub fn add_paragraph_with_inlines(&mut self, inlines: Vec<InlineNode>) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(Node::paragraph_with_inlines(inlines));
+        index
+    }
+
     /// Adds a code block to the document
     pub fn add_code_block(
         &mut self,

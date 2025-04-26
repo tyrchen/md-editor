@@ -339,12 +339,13 @@ fn inline_to_markdown(inline: &InlineNode) -> String {
             title,
             children,
         } => {
-            let content = inlines_to_markdown(children);
-
-            if let Some(t) = title {
-                format!("[{}]({} \"{}\")", content, url, t)
+            if url.contains('@') && !url.contains("://") {
+                // If the URL looks like an email address, format it as an autolink
+                format!("<{}>", url)
+            } else if let Some(t) = title {
+                format!("[{}]({} \"{}\")", inlines_to_markdown(children), url, t)
             } else {
-                format!("[{}]({})", content, url)
+                format!("[{}]({})", inlines_to_markdown(children), url)
             }
         }
 
@@ -361,6 +362,7 @@ fn inline_to_markdown(inline: &InlineNode) -> String {
         }
 
         InlineNode::AutoLink { url, is_email: _ } => {
+            // Use angle brackets for both URLs and email addresses (GFM-compliant)
             format!("<{}>", url)
         }
 
@@ -1017,5 +1019,63 @@ fn main() {
                 i
             );
         }
+    }
+
+    #[test]
+    fn test_autolinks() {
+        // Test autolinks parsing
+        let markdown = "Normal link: [Example](https://example.com)\n\nAutolink: <https://example.com>\n\nEmail autolink: <user@example.com>\n\nRegular link with email: [Email me](user@example.com)";
+        let doc = parse_markdown(markdown).expect("Should parse autolinks");
+
+        // Verify the document structure
+        assert_eq!(doc.nodes.len(), 4);
+
+        // Debug: Print document structure
+        for (i, node) in doc.nodes.iter().enumerate() {
+            println!("Node {}: {:?}", i, node);
+
+            if let Node::Paragraph { children } = node {
+                for (j, inline) in children.iter().enumerate() {
+                    println!("  Inline {}.{}: {:?}", i, j, inline);
+                }
+            }
+        }
+
+        // Convert back to markdown and verify
+        let md = to_markdown(&doc);
+        println!("Autolinks Markdown:\n{}", md);
+
+        // Check that autolinks are preserved
+        assert!(md.contains("<https://example.com>"));
+        assert!(md.contains("<user@example.com>"));
+
+        // Email links should be converted to autolinks
+        assert!(!md.contains("[Email me](user@example.com)"));
+        assert!(md.contains("Email me: <user@example.com>") || md.contains("<user@example.com>"));
+
+        // Create a new document with autolinks programmatically
+        let mut doc2 = Document::new();
+        doc2.add_paragraph_with_inlines(vec![
+            InlineNode::text("URL autolink: "),
+            InlineNode::autolink_url("https://example.org"),
+        ]);
+        doc2.add_paragraph_with_inlines(vec![
+            InlineNode::text("Email autolink: "),
+            InlineNode::autolink_email("contact@example.org"),
+        ]);
+        // Add a regular link with email-like URL
+        doc2.add_paragraph_with_inlines(vec![
+            InlineNode::text("Regular link with email: "),
+            InlineNode::link("support@example.org", "Support"),
+        ]);
+
+        // Convert to markdown
+        let md2 = to_markdown(&doc2);
+        println!("Programmatic Autolinks:\n{}", md2);
+
+        // Verify autolinks in output
+        assert!(md2.contains("<https://example.org>"));
+        assert!(md2.contains("<contact@example.org>"));
+        assert!(md2.contains("<support@example.org>"));
     }
 }

@@ -29,14 +29,14 @@
 ### Phase 4: Enhanced Markdown Support
 - [x] Plan GitHub Flavored Markdown (GFM) implementation
 - [x] Implement enhanced table functionality
-- [ ] Implement autolinks
+- [x] Implement autolinks
 - [ ] Improve task list interactivity
 - [ ] Enhance code blocks with language-specific features
 
 ## In Progress Tasks
 
 ### Phase 5: Advanced GFM Features
-- [ ] Implement autolinks
+- [x] Implement autolinks
 - [ ] Improve task list interactivity
 - [ ] Enhance code blocks with language-specific features
 - [ ] Implement GFM-compliant Markdown serialization

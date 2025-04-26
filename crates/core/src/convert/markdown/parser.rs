@@ -3,8 +3,8 @@ use crate::{
     TableCell, TableProperties, TextFormatting, TextNode,
 };
 use pulldown_cmark::{
-    Alignment, CodeBlockKind, Event, HeadingLevel, /* LinkType, */ Options, Parser, Tag,
-    TagEnd,
+    Alignment, CodeBlockKind, Event, HeadingLevel, LinkType, /* LinkType, */ Options, Parser,
+    Tag, TagEnd,
 };
 use std::collections::HashMap;
 
@@ -381,27 +381,8 @@ pub(crate) fn parse_markdown(markdown: &str) -> Result<Document, ParseError> {
                 Tag::Strikethrough => {
                     stack.formatting = stack.formatting.clone().with_strikethrough()
                 }
-                // Ignore link_type and id for now
-                Tag::Link {
-                    dest_url, title, ..
-                } => {
-                    // Store link information for later, when we handle TagEnd::Link
-                    let link_info = InlineNode::Link {
-                        url: dest_url.into_string(),
-                        title: if title.is_empty() {
-                            None
-                        } else {
-                            Some(title.into_string())
-                        },
-                        children: vec![], // Will be populated later
-                    };
-
-                    // Store the link and its index in the accumulator for later
-                    let link_index = stack.inline_accumulator.len();
-                    stack.inline_accumulator.push(link_info);
-                    stack.last_link_index = Some(link_index);
-                }
-                // Ignore link_type and id for now
+                // Add image. Should it be wrapped in paragraph? Depends on context.
+                // Add to accumulator for now, let flush handle paragraphing.
                 Tag::Image {
                     dest_url, title, ..
                 } => {
@@ -430,9 +411,50 @@ pub(crate) fn parse_markdown(markdown: &str) -> Result<Document, ParseError> {
                         },
                     };
 
-                    // Add image. Should it be wrapped in paragraph? Depends on context.
-                    // Add to accumulator for now, let flush handle paragraphing.
                     stack.push_inline(image_node);
+                }
+                // Add autolink handler as a separate case in the Event::Start(tag) match
+                Tag::Link {
+                    link_type,
+                    dest_url,
+                    title,
+                    ..
+                } => {
+                    // Check if it's an autolink or if it looks like an email address
+                    let url_str = dest_url.into_string();
+                    let is_email_format = url_str.contains('@') && !url_str.contains("://");
+
+                    if link_type == LinkType::Autolink || is_email_format {
+                        // Convert to AutoLink node for both URL and email autolinks
+                        stack.push_inline(InlineNode::AutoLink {
+                            url: url_str,
+                            is_email: is_email_format,
+                        });
+
+                        // Skip the URL text content and end tag, as they're redundant for autolinks
+                        for event in events.by_ref() {
+                            match event {
+                                Event::End(TagEnd::Link) => break,
+                                _ => continue,
+                            }
+                        }
+                    } else {
+                        // Handle regular links
+                        let link_info = InlineNode::Link {
+                            url: url_str,
+                            title: if title.is_empty() {
+                                None
+                            } else {
+                                Some(title.into_string())
+                            },
+                            children: vec![], // Will be populated later
+                        };
+
+                        // Store the link and its index in the accumulator for later
+                        let link_index = stack.inline_accumulator.len();
+                        stack.inline_accumulator.push(link_info);
+                        stack.last_link_index = Some(link_index);
+                    }
                 }
                 // Add catch-all for other Tag types
                 _ => { /* Optional: Log unhandled Start tags */ }
