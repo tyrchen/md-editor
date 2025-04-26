@@ -15,6 +15,7 @@ It allows representing, manipulating, and serializing hierarchical markdown docu
 - Editing operations (insert, split, etc.)
 - Fluent builder API for document creation
 - Simplified selection API with helper methods
+- Transaction support for atomic operations
 
 ## Basic Example
 
@@ -87,6 +88,32 @@ if doc.has_multi_node_selection() {
 
 // Collapse selection to cursor
 doc.collapse_selection_to_start();
+```
+
+## Transaction API Example
+
+```rust
+use md_core::{Document, Editor, TextFormatting};
+
+// Create a document
+let doc = Document::new();
+let mut editor = Editor::new(doc);
+
+// Start a transaction for grouping multiple operations
+let transaction = editor.begin_transaction()
+    .insert_heading(0, 1, "Transaction Example")
+    .insert_paragraph(1, "This paragraph is added atomically with the heading.")
+    .select_text_range(1, 5, 14)
+    .format_selection(TextFormatting {
+        bold: true,
+        ..Default::default()
+    });
+
+// Commit the transaction - all operations succeed or fail together
+editor.execute_transaction(transaction).unwrap();
+
+// Undo all operations in one step
+editor.undo().unwrap();
 ```
 
 ## Data Structure

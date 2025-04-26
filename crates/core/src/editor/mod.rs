@@ -1,5 +1,6 @@
 mod command;
 mod commands;
+mod transaction;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,13 +28,16 @@ use commands::SelectionIndentCommand;
 use commands::TableOperation;
 use commands::TableOperationsCommand;
 
+// Export the Transaction type
+pub use transaction::Transaction;
+
 use crate::error::EditError;
 use crate::{Document, ListType, Node, TableAlignment, TextFormatting};
 
 // Define an alias for the Command trait to avoid conflicts
 use command::Command as EditorCommand;
 
-/// Editor implementation that provides operations for modifying a document
+/// Editor manages a document and provides operations to modify it
 pub struct Editor {
     document: Rc<RefCell<Document>>,
     undo_stack: Vec<Box<dyn EditorCommand>>,
@@ -56,7 +60,7 @@ pub enum NodeConversionType {
 }
 
 impl Editor {
-    /// Create a new editor for an existing document
+    /// Creates a new editor instance with the given document
     pub fn new(document: Document) -> Self {
         Self {
             document: Rc::new(RefCell::new(document)),
@@ -66,9 +70,14 @@ impl Editor {
         }
     }
 
+    /// Creates a new editor instance with a default empty document
+    pub fn new_empty() -> Self {
+        Self::new(Document::new())
+    }
+
     /// Get a reference to the current document
-    pub fn document(&self) -> Rc<RefCell<Document>> {
-        self.document.clone()
+    pub fn document(&self) -> &Rc<RefCell<Document>> {
+        &self.document
     }
 
     /// Set the maximum number of operations to keep in history
@@ -680,6 +689,143 @@ impl Editor {
         let document = self.document.borrow();
         document.get_selected_text()
     }
+
+    /// Begin a transaction to group multiple operations into a single atomic change.
+    ///
+    /// Returns a Transaction object that can be used to build up a series of operations.
+    /// The transaction is not applied to the document until it is committed and executed.
+    ///
+    /// # Example
+    /// ```
+    /// let mut transaction = editor.begin_transaction();
+    /// transaction.insert_text(0, 0, "Hello");
+    /// let commands = transaction.commit()?;
+    /// editor.execute_transaction_commands(commands)?;
+    /// ```
+    pub fn begin_transaction(&self) -> Transaction {
+        Transaction::new(self.document.clone())
+    }
+
+    /// Execute a transaction with a provided closure that builds the transaction and returns
+    /// a result along with the transaction.
+    ///
+    /// # Example
+    /// ```
+    /// let count = editor.with_transaction(|transaction| {
+    ///     let transaction = transaction.insert_text(0, 0, "Hello");
+    ///     Ok((transaction, 1)) // Return transaction and a value
+    /// })?;
+    /// ```
+    pub fn with_transaction<F, R>(&mut self, transaction_builder: F) -> Result<R, EditError>
+    where
+        F: FnOnce(Transaction) -> Result<(Transaction, R), EditError>,
+    {
+        // Create a new transaction
+        let transaction = Transaction::new(self.document.clone());
+
+        // Let the closure build the transaction and produce a result
+        let (transaction, result) = transaction_builder(transaction)?;
+
+        // Execute the transaction
+        self.execute_transaction(transaction)?;
+
+        // Return the result from the closure
+        Ok(result)
+    }
+
+    /// Execute a simple transaction with a provided closure that builds the transaction.
+    ///
+    /// # Example
+    /// ```
+    /// editor.with_simple_transaction(|transaction| {
+    ///     transaction
+    ///         .insert_text(0, 0, "Hello")
+    ///         .format_text(0, 0, 5, TextFormatting::bold())
+    /// })?;
+    /// ```
+    pub fn with_simple_transaction<F>(&mut self, transaction_builder: F) -> Result<(), EditError>
+    where
+        F: FnOnce(Transaction) -> Transaction,
+    {
+        // Create a new transaction
+        let transaction = Transaction::new(self.document.clone());
+
+        // Let the closure build the transaction
+        let transaction = transaction_builder(transaction);
+
+        // Execute the transaction
+        self.execute_transaction(transaction)
+    }
+
+    /// Execute a transaction, updating the undo stack as a single composite command.
+    ///
+    /// This method commits the transaction and applies the changes to the document.
+    pub fn execute_transaction(&mut self, transaction: Transaction) -> Result<(), EditError> {
+        // Commit the transaction
+        let commands = transaction.commit()?;
+
+        // Execute the committed commands
+        self.execute_transaction_commands(commands)
+    }
+
+    /// Execute a list of commands from a transaction and add to undo stack.
+    ///
+    /// This is a lower-level method that's used by execute_transaction.
+    pub fn execute_transaction_commands(
+        &mut self,
+        commands: Vec<Box<dyn EditorCommand>>,
+    ) -> Result<(), EditError> {
+        // If there are no commands, nothing to do
+        if commands.is_empty() {
+            return Ok(());
+        }
+
+        // Create a composite command that represents all commands as one operation
+        let composite = CompositeCommand::new(commands);
+
+        // Add to undo stack
+        self.undo_stack.push(Box::new(composite));
+
+        // Clear redo stack since we executed a new command
+        self.redo_stack.clear();
+
+        // Trim history if needed
+        if self.undo_stack.len() > self.max_history {
+            self.undo_stack.remove(0);
+        }
+
+        Ok(())
+    }
+}
+
+/// A command that groups multiple commands together as a single undo/redo unit
+struct CompositeCommand {
+    commands: Vec<Box<dyn EditorCommand>>,
+}
+
+impl CompositeCommand {
+    fn new(commands: Vec<Box<dyn EditorCommand>>) -> Self {
+        Self { commands }
+    }
+}
+
+impl EditorCommand for CompositeCommand {
+    fn execute(&mut self) -> Result<(), EditError> {
+        // All commands should already be executed by the transaction
+        Ok(())
+    }
+
+    fn undo(&mut self) -> Result<(), EditError> {
+        // Undo in reverse order
+        for cmd in self.commands.iter_mut().rev() {
+            cmd.undo()?;
+        }
+        Ok(())
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[cfg(test)]
@@ -697,13 +843,10 @@ mod command_tests {
         let result = editor.delete_text(index, 7, 12);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after deletion
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
-            match &borrowed_doc.nodes[index] {
+            let doc = editor.document().borrow();
+            match &doc.nodes[index] {
                 Node::Paragraph { children } => match &children[0] {
                     InlineNode::Text(text_node) => {
                         assert_eq!(text_node.text, "Hello, !");
@@ -718,16 +861,18 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-        match &borrowed_doc.nodes[index] {
-            Node::Paragraph { children } => match &children[0] {
-                InlineNode::Text(text_node) => {
-                    assert_eq!(text_node.text, "Hello, world!");
-                }
-                _ => panic!("Expected Text node"),
-            },
-            _ => panic!("Expected Paragraph node"),
+        // Verify content after undo
+        {
+            let doc = editor.document().borrow();
+            match &doc.nodes[index] {
+                Node::Paragraph { children } => match &children[0] {
+                    InlineNode::Text(text_node) => {
+                        assert_eq!(text_node.text, "Hello, world!");
+                    }
+                    _ => panic!("Expected Text node"),
+                },
+                _ => panic!("Expected Paragraph node"),
+            }
         }
     }
 
@@ -743,16 +888,13 @@ mod command_tests {
         let result = editor.merge_nodes(p1, p2);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify after merge
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now have only one paragraph
-            assert_eq!(borrowed_doc.nodes.len(), 1);
+            assert_eq!(doc.nodes.len(), 1);
 
-            match &borrowed_doc.nodes[0] {
+            match &doc.nodes[0] {
                 Node::Paragraph { children } => {
                     // Should have two text nodes now
                     assert_eq!(children.len(), 2);
@@ -765,11 +907,12 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to two paragraphs
-        assert_eq!(borrowed_doc.nodes.len(), 2);
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to two paragraphs
+            assert_eq!(doc.nodes.len(), 2);
+        }
     }
 
     #[test]
@@ -788,14 +931,11 @@ mod command_tests {
         let result = editor.format_text(index, 7, 12, formatting);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after formatting
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now have three text nodes: before, formatted, after
-            match &borrowed_doc.nodes[index] {
+            match &doc.nodes[index] {
                 Node::Paragraph { children } => {
                     assert_eq!(children.len(), 3);
 
@@ -816,23 +956,24 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to one text node
+            match &doc.nodes[index] {
+                Node::Paragraph { children } => {
+                    assert_eq!(children.len(), 1);
 
-        // Should be back to one text node
-        match &borrowed_doc.nodes[index] {
-            Node::Paragraph { children } => {
-                assert_eq!(children.len(), 1);
-
-                match &children[0] {
-                    InlineNode::Text(text_node) => {
-                        assert_eq!(text_node.text, "Hello, world!");
-                        assert!(!text_node.formatting.bold);
+                    match &children[0] {
+                        InlineNode::Text(text_node) => {
+                            assert_eq!(text_node.text, "Hello, world!");
+                            assert!(!text_node.formatting.bold);
+                        }
+                        _ => panic!("Expected Text node"),
                     }
-                    _ => panic!("Expected Text node"),
                 }
+                _ => panic!("Expected Paragraph node"),
             }
-            _ => panic!("Expected Paragraph node"),
         }
     }
 
@@ -848,16 +989,13 @@ mod command_tests {
         let result = editor.delete_node(0);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after deletion
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now have only one paragraph
-            assert_eq!(borrowed_doc.nodes.len(), 1);
+            assert_eq!(doc.nodes.len(), 1);
 
-            match &borrowed_doc.nodes[0] {
+            match &doc.nodes[0] {
                 Node::Paragraph { children } => match &children[0] {
                     InlineNode::Text(text_node) => {
                         assert_eq!(text_node.text, "Second paragraph.");
@@ -872,11 +1010,12 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to two paragraphs
-        assert_eq!(borrowed_doc.nodes.len(), 2);
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to two paragraphs
+            assert_eq!(doc.nodes.len(), 2);
+        }
     }
 
     #[test]
@@ -892,14 +1031,11 @@ mod command_tests {
         let result = editor.move_node(0, 3);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after move
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Order should now be: Second, Third, First
-            match &borrowed_doc.nodes[2] {
+            match &doc.nodes[2] {
                 Node::Paragraph { children } => match &children[0] {
                     InlineNode::Text(text_node) => {
                         assert_eq!(text_node.text, "First paragraph.");
@@ -914,18 +1050,19 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to original order
-        match &borrowed_doc.nodes[0] {
-            Node::Paragraph { children } => match &children[0] {
-                InlineNode::Text(text_node) => {
-                    assert_eq!(text_node.text, "First paragraph.");
-                }
-                _ => panic!("Expected Text node"),
-            },
-            _ => panic!("Expected Paragraph node"),
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to original order
+            match &doc.nodes[0] {
+                Node::Paragraph { children } => match &children[0] {
+                    InlineNode::Text(text_node) => {
+                        assert_eq!(text_node.text, "First paragraph.");
+                    }
+                    _ => panic!("Expected Text node"),
+                },
+                _ => panic!("Expected Paragraph node"),
+            }
         }
     }
 
@@ -940,14 +1077,11 @@ mod command_tests {
         let result = editor.convert_node_type(index, NodeConversionType::Heading(2));
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after conversion
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now be a heading
-            match &borrowed_doc.nodes[index] {
+            match &doc.nodes[index] {
                 Node::Heading { level, children } => {
                     assert_eq!(*level, 2);
                     match &children[0] {
@@ -965,18 +1099,19 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to a paragraph
-        match &borrowed_doc.nodes[index] {
-            Node::Paragraph { children } => match &children[0] {
-                InlineNode::Text(text_node) => {
-                    assert_eq!(text_node.text, "This is a paragraph");
-                }
-                _ => panic!("Expected Text node"),
-            },
-            _ => panic!("Expected Paragraph node"),
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to a paragraph
+            match &doc.nodes[index] {
+                Node::Paragraph { children } => match &children[0] {
+                    InlineNode::Text(text_node) => {
+                        assert_eq!(text_node.text, "This is a paragraph");
+                    }
+                    _ => panic!("Expected Text node"),
+                },
+                _ => panic!("Expected Paragraph node"),
+            }
         }
     }
 
@@ -991,13 +1126,10 @@ mod command_tests {
         let result = editor.insert_text(index, 5, ", beautiful");
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after insertion
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
-            match &borrowed_doc.nodes[index] {
+            let doc = editor.document().borrow();
+            match &doc.nodes[index] {
                 Node::Paragraph { children } => match &children[0] {
                     InlineNode::Text(text_node) => {
                         assert_eq!(text_node.text, "Hello, beautiful world!");
@@ -1012,16 +1144,18 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-        match &borrowed_doc.nodes[index] {
-            Node::Paragraph { children } => match &children[0] {
-                InlineNode::Text(text_node) => {
-                    assert_eq!(text_node.text, "Hello world!");
-                }
-                _ => panic!("Expected Text node"),
-            },
-            _ => panic!("Expected Paragraph node"),
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            match &doc.nodes[index] {
+                Node::Paragraph { children } => match &children[0] {
+                    InlineNode::Text(text_node) => {
+                        assert_eq!(text_node.text, "Hello world!");
+                    }
+                    _ => panic!("Expected Text node"),
+                },
+                _ => panic!("Expected Paragraph node"),
+            }
         }
     }
 
@@ -1036,17 +1170,14 @@ mod command_tests {
         let result = editor.insert_heading(1, 2, "New Heading");
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after insertion
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now have two nodes
-            assert_eq!(borrowed_doc.nodes.len(), 2);
+            assert_eq!(doc.nodes.len(), 2);
 
             // Check if the new node is a heading with the right content
-            match &borrowed_doc.nodes[1] {
+            match &doc.nodes[1] {
                 Node::Heading { level, children } => {
                     assert_eq!(*level, 2);
                     match &children[0] {
@@ -1064,11 +1195,12 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to one paragraph
-        assert_eq!(borrowed_doc.nodes.len(), 1);
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to one paragraph
+            assert_eq!(doc.nodes.len(), 1);
+        }
     }
 
     #[test]
@@ -1082,17 +1214,14 @@ mod command_tests {
         let result = editor.duplicate_node(p1);
         assert!(result.is_ok());
 
-        // Clone the document reference to avoid borrowing conflicts
-        let document_ref = editor.document();
+        // Verify changes after duplication
         {
-            // Scope the borrow to ensure it's dropped before we call undo
-            let borrowed_doc = document_ref.borrow();
-
+            let doc = editor.document().borrow();
             // Should now have two identical paragraphs
-            assert_eq!(borrowed_doc.nodes.len(), 2);
+            assert_eq!(doc.nodes.len(), 2);
 
             // Check that both paragraphs have the same text
-            match (&borrowed_doc.nodes[0], &borrowed_doc.nodes[1]) {
+            match (&doc.nodes[0], &doc.nodes[1]) {
                 (
                     Node::Paragraph {
                         children: children1,
@@ -1115,10 +1244,11 @@ mod command_tests {
         let result = editor.undo();
         assert!(result.is_ok());
 
-        // Borrow again after the undo operation
-        let borrowed_doc = document_ref.borrow();
-
-        // Should be back to one paragraph
-        assert_eq!(borrowed_doc.nodes.len(), 1);
+        // Verify after undo
+        {
+            let doc = editor.document().borrow();
+            // Should be back to one paragraph
+            assert_eq!(doc.nodes.len(), 1);
+        }
     }
 }
