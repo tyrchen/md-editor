@@ -9,6 +9,7 @@ use std::rc::Rc;
 use command::{DeleteTextCommand, MergeNodesCommand};
 
 // Import specific commands by name
+use commands::AddTaskItemCommand;
 use commands::ConvertNodeTypeCommand;
 use commands::CopySelectionCommand;
 use commands::CreateTOCCommand;
@@ -16,6 +17,7 @@ use commands::CreateTableCommand;
 use commands::CutSelectionCommand;
 use commands::DeleteNodeCommand;
 use commands::DuplicateNodeCommand;
+use commands::EditTaskItemCommand;
 use commands::FindReplaceCommand;
 use commands::FormatTextCommand;
 use commands::GroupNodesCommand;
@@ -23,10 +25,13 @@ use commands::IndentDirection;
 use commands::InsertNodeCommand;
 use commands::InsertTextCommand;
 use commands::MoveNodeCommand;
+use commands::MoveTaskItemCommand;
+use commands::RemoveTaskItemCommand;
 use commands::SelectionFormatCommand;
 use commands::SelectionIndentCommand;
 use commands::TableOperation;
 use commands::TableOperationsCommand;
+use commands::ToggleTaskCommand;
 
 // Export the Transaction type
 pub use transaction::Transaction;
@@ -928,6 +933,117 @@ impl Editor {
             self.document.clone(),
             node_index,
             TableOperation::SetTableProperties(properties),
+        ));
+        self.execute_command(command)
+    }
+
+    /// Toggle the checked status of a task list item
+    pub fn toggle_task(&mut self, node_index: usize, item_index: usize) -> Result<(), EditError> {
+        let command = Box::new(ToggleTaskCommand::new(
+            self.document.clone(),
+            node_index,
+            item_index,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Add a new item to a task list
+    pub fn add_task_item(
+        &mut self,
+        node_index: usize,
+        position: usize,
+        text: impl Into<String>,
+        checked: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(AddTaskItemCommand::new(
+            self.document.clone(),
+            node_index,
+            position,
+            text,
+            checked,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Remove an item from a task list
+    pub fn remove_task_item(
+        &mut self,
+        node_index: usize,
+        item_index: usize,
+    ) -> Result<(), EditError> {
+        let command = Box::new(RemoveTaskItemCommand::new(
+            self.document.clone(),
+            node_index,
+            item_index,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Edit the text content of a task list item
+    pub fn edit_task_item(
+        &mut self,
+        node_index: usize,
+        item_index: usize,
+        text: impl Into<String>,
+    ) -> Result<(), EditError> {
+        let command = Box::new(EditTaskItemCommand::new(
+            self.document.clone(),
+            node_index,
+            item_index,
+            text,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Move a task item from one position to another within the same task list
+    ///
+    /// This method allows reordering items within a task list by moving a task item
+    /// from its current position to a new position.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_index` - The index of the task list node in the document
+    /// * `from_index` - The current index of the task item to move
+    /// * `to_index` - The destination index for the task item
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if the operation was successful
+    /// * `Err` with appropriate error if the operation failed (e.g., indices out of bounds)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use md_core::{Document, Editor, ListItem, ListType, Node};
+    ///
+    /// // Create a document with a task list
+    /// let mut document = Document::new();
+    /// let items = vec![
+    ///     ListItem::task("Task 1", false),
+    ///     ListItem::task("Task 2", true),
+    ///     ListItem::task("Task 3", false),
+    /// ];
+    /// document.nodes.push(Node::List {
+    ///     list_type: ListType::Task,
+    ///     items,
+    /// });
+    ///
+    /// let mut editor = Editor::new(document);
+    ///
+    /// // Move the first task item to the end of the list
+    /// editor.move_task_item(0, 0, 2).unwrap();
+    /// ```
+    pub fn move_task_item(
+        &mut self,
+        node_index: usize,
+        from_index: usize,
+        to_index: usize,
+    ) -> Result<(), EditError> {
+        let command = Box::new(MoveTaskItemCommand::new(
+            self.document.clone(),
+            node_index,
+            from_index,
+            to_index,
         ));
         self.execute_command(command)
     }
