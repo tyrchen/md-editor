@@ -265,6 +265,7 @@ impl Document {
                 Node::BlockQuote { .. } => "BlockQuote".to_string(),
                 Node::ThematicBreak => "ThematicBreak".to_string(),
                 Node::Table { .. } => "Table".to_string(),
+                Node::Group { name, .. } => format!("Group ({})", name),
                 Node::FootnoteReference { .. } => "FootnoteReference".to_string(),
                 Node::FootnoteDefinition { .. } => "FootnoteDefinition".to_string(),
                 Node::DefinitionList { .. } => "DefinitionList".to_string(),

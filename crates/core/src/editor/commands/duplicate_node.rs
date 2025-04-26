@@ -34,6 +34,7 @@ impl DuplicateNodeCommand {
             Node::BlockQuote { .. } => "BlockQuote".to_string(),
             Node::ThematicBreak => "ThematicBreak".to_string(),
             Node::Table { .. } => "Table".to_string(),
+            Node::Group { name, .. } => format!("Group ({})", name),
             Node::FootnoteReference(_) => "FootnoteReference".to_string(),
             Node::FootnoteDefinition(_) => "FootnoteDefinition".to_string(),
             Node::DefinitionList { .. } => "DefinitionList".to_string(),

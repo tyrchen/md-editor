@@ -80,11 +80,8 @@ impl Command for SelectionFormatCommand {
                             let next_offset = current_offset + text_len;
 
                             // Case 1: Text node is completely before the selection
-                            if next_offset <= start_offset {
-                                new_children.push(child.clone());
-                            }
                             // Case 2: Text node is completely after the selection
-                            else if current_offset >= end_offset {
+                            if next_offset <= start_offset || current_offset >= end_offset {
                                 new_children.push(child.clone());
                             }
                             // Case 3: Text node overlaps with the selection

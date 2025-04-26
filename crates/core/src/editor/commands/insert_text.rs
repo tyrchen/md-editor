@@ -140,6 +140,7 @@ impl Command for InsertTextCommand {
             Node::BlockQuote { .. } => Err(EditError::UnsupportedOperation),
             Node::ThematicBreak => Err(EditError::UnsupportedOperation),
             Node::Table { .. } => Err(EditError::UnsupportedOperation),
+            Node::Group { .. } => Err(EditError::UnsupportedOperation),
             Node::FootnoteReference(_) => Err(EditError::UnsupportedOperation),
             Node::FootnoteDefinition(_) => Err(EditError::UnsupportedOperation),
             Node::DefinitionList { .. } => Err(EditError::UnsupportedOperation),
@@ -178,6 +179,7 @@ impl Command for InsertTextCommand {
                 | Node::BlockQuote { .. }
                 | Node::ThematicBreak
                 | Node::Table { .. }
+                | Node::Group { .. }
                 | Node::FootnoteReference(_)
                 | Node::FootnoteDefinition(_)
                 | Node::DefinitionList { .. }

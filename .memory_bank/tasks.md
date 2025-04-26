@@ -11,24 +11,22 @@
 - [x] Write tests for all new commands
 - [x] Create documentation in memory bank
 
-## Current Tasks
-
 ### Phase 2: Selection-Based Operations
-- [ ] Design Selection data structure
-- [ ] Add SelectionState to Document model
-- [ ] Implement `CutSelectionCommand`
-- [ ] Implement `CopySelectionCommand`
-- [ ] Implement `SelectionFormatCommand`
-- [ ] Implement `SelectionIndentCommand`
+- [x] Design Selection data structure
+- [x] Add SelectionState to Document model
+- [x] Implement `CutSelectionCommand`
+- [x] Implement `CopySelectionCommand`
+- [x] Implement `SelectionFormatCommand`
+- [x] Implement `SelectionIndentCommand`
 
 ## Upcoming Tasks
 
 ### Phase 3: Advanced Document Structure
-- [ ] Design table data structure
-- [ ] Implement `TableOperationsCommand`
-- [ ] Implement `CreateTableCommand`
-- [ ] Implement `GroupNodesCommand`
-- [ ] Implement `CreateTOCCommand`
+- [x] Design table data structure
+- [x] Implement `TableOperationsCommand`
+- [x] Implement `CreateTableCommand`
+- [x] Implement `GroupNodesCommand`
+- [x] Implement `CreateTOCCommand`
 
 ### Phase 4: Collaboration Features
 - [ ] Design comment/annotation data structure

@@ -134,6 +134,20 @@ fn node_to_markdown(node: &Node) -> String {
 
         Node::ThematicBreak => "---".to_string(),
 
+        Node::Group { name, children } => {
+            // Since Markdown doesn't have a native group concept, we'll represent it with a
+            // comment to mark the beginning and end of a group, with the content in between
+            let mut markdown = format!("<!-- group: {} -->\n\n", name);
+
+            for child in children {
+                markdown.push_str(&node_to_markdown(child));
+                markdown.push_str("\n\n");
+            }
+
+            markdown.push_str(&format!("<!-- end group: {} -->", name));
+            markdown
+        }
+
         Node::Table {
             header,
             rows,

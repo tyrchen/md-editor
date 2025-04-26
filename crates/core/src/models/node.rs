@@ -283,6 +283,15 @@ pub enum Node {
         alignments: Vec<TableAlignment>,
     },
 
+    /// A group of nodes treated as a single unit
+    #[serde(rename = "group")]
+    Group {
+        /// Name or type of the group
+        name: String,
+        /// Child nodes in the group
+        children: Vec<Node>,
+    },
+
     /// A footnote reference
     #[serde(rename = "footnote_reference")]
     FootnoteReference(FootnoteReference),
@@ -484,6 +493,14 @@ impl Node {
         Self::MathBlock { math: math.into() }
     }
 
+    /// Creates a new group node
+    pub fn group(name: impl Into<String>, children: Vec<Node>) -> Self {
+        Self::Group {
+            name: name.into(),
+            children,
+        }
+    }
+
     /// Returns this node as a heading if it is one
     pub fn as_heading(&self) -> Option<(u8, &Vec<InlineNode>)> {
         match self {
@@ -571,5 +588,13 @@ impl Node {
     /// Returns whether this node is a thematic break
     pub fn is_thematic_break(&self) -> bool {
         matches!(self, Self::ThematicBreak)
+    }
+
+    /// Returns the group components if this node is a group
+    pub fn as_group(&self) -> Option<(&str, &Vec<Node>)> {
+        match self {
+            Self::Group { name, children } => Some((name, children)),
+            _ => None,
+        }
     }
 }

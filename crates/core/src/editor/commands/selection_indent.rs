@@ -34,12 +34,12 @@ impl SelectionIndentCommand {
 
     // Helper function to check if two list types are compatible for merging
     fn list_types_compatible(type1: &ListType, type2: &ListType) -> bool {
-        match (type1, type2) {
-            (ListType::Ordered, ListType::Ordered) => true,
-            (ListType::Unordered, ListType::Unordered) => true,
-            (ListType::Task, ListType::Task) => true,
-            _ => false,
-        }
+        matches!(
+            (type1, type2),
+            (ListType::Ordered, ListType::Ordered)
+                | (ListType::Unordered, ListType::Unordered)
+                | (ListType::Task, ListType::Task)
+        )
     }
 }
 
@@ -127,15 +127,8 @@ fn handle_increase_indent(
             continue;
         }
 
-        let current_is_list = match &document.nodes[idx] {
-            Node::List { .. } => true,
-            _ => false,
-        };
-
-        let prev_is_list = match &document.nodes[idx - 1] {
-            Node::List { .. } => true,
-            _ => false,
-        };
+        let current_is_list = matches!(&document.nodes[idx], Node::List { .. });
+        let prev_is_list = matches!(&document.nodes[idx - 1], Node::List { .. });
 
         if current_is_list && prev_is_list {
             if let (
@@ -252,16 +245,16 @@ fn handle_decrease_indent(
                 *code = code
                     .lines()
                     .map(|line| {
-                        if line.starts_with('\t') {
-                            &line[1..]
-                        } else if line.starts_with("    ") {
-                            &line[4..]
-                        } else if line.starts_with("   ") {
-                            &line[3..]
-                        } else if line.starts_with("  ") {
-                            &line[2..]
-                        } else if line.starts_with(' ') {
-                            &line[1..]
+                        if let Some(stripped) = line.strip_prefix('\t') {
+                            stripped
+                        } else if let Some(stripped) = line.strip_prefix("    ") {
+                            stripped
+                        } else if let Some(stripped) = line.strip_prefix("   ") {
+                            stripped
+                        } else if let Some(stripped) = line.strip_prefix("  ") {
+                            stripped
+                        } else if let Some(stripped) = line.strip_prefix(' ') {
+                            stripped
                         } else {
                             line
                         }

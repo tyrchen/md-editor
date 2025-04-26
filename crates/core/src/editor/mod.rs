@@ -10,20 +10,25 @@ use command::{DeleteTextCommand, MergeNodesCommand};
 // Import specific commands by name
 use commands::ConvertNodeTypeCommand;
 use commands::CopySelectionCommand;
+use commands::CreateTOCCommand;
+use commands::CreateTableCommand;
 use commands::CutSelectionCommand;
 use commands::DeleteNodeCommand;
 use commands::DuplicateNodeCommand;
 use commands::FindReplaceCommand;
 use commands::FormatTextCommand;
+use commands::GroupNodesCommand;
 use commands::IndentDirection;
 use commands::InsertNodeCommand;
 use commands::InsertTextCommand;
 use commands::MoveNodeCommand;
 use commands::SelectionFormatCommand;
 use commands::SelectionIndentCommand;
+use commands::TableOperation;
+use commands::TableOperationsCommand;
 
 use crate::error::EditError;
-use crate::{Document, ListType, Node, TextFormatting};
+use crate::{Document, ListType, Node, TableAlignment, TextFormatting};
 
 // Define an alias for the Command trait to avoid conflicts
 use command::Command as EditorCommand;
@@ -353,6 +358,223 @@ impl Editor {
         let command = Box::new(SelectionIndentCommand::new(
             self.document.clone(),
             IndentDirection::Decrease,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create a table of contents from document headings
+    ///
+    /// - `position`: The position in the document where the TOC should be inserted
+    /// - `max_level`: The maximum heading level to include (1-6)
+    pub fn create_table_of_contents(
+        &mut self,
+        position: usize,
+        max_level: u8,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTOCCommand::new(
+            self.document.clone(),
+            position,
+            max_level,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create an empty table with default alignments
+    ///
+    /// - `position`: The position in the document where the table should be inserted
+    /// - `columns`: The number of columns in the table
+    /// - `rows`: The number of rows in the table (not including header)
+    /// - `with_header`: Whether to include a header row
+    pub fn create_table(
+        &mut self,
+        position: usize,
+        columns: usize,
+        rows: usize,
+        with_header: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTableCommand::new(
+            self.document.clone(),
+            position,
+            columns,
+            rows,
+            with_header,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create a table with custom column alignments
+    ///
+    /// - `position`: The position in the document where the table should be inserted
+    /// - `columns`: The number of columns in the table
+    /// - `rows`: The number of rows in the table (not including header)
+    /// - `with_header`: Whether to include a header row
+    /// - `alignments`: Column alignment specifications
+    pub fn create_table_with_alignments(
+        &mut self,
+        position: usize,
+        columns: usize,
+        rows: usize,
+        with_header: bool,
+        alignments: Vec<TableAlignment>,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTableCommand::with_alignments(
+            self.document.clone(),
+            position,
+            columns,
+            rows,
+            with_header,
+            alignments,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create a table with predefined data
+    ///
+    /// - `position`: The position in the document where the table should be inserted
+    /// - `data`: Table data (rows of cells)
+    /// - `with_header`: Whether the first row should be treated as a header
+    /// - `alignments`: Optional column alignment specifications
+    pub fn create_table_with_data(
+        &mut self,
+        position: usize,
+        data: Vec<Vec<String>>,
+        with_header: bool,
+        alignments: Option<Vec<TableAlignment>>,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTableCommand::with_data(
+            self.document.clone(),
+            position,
+            data,
+            with_header,
+            alignments,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Add a row to an existing table
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row_index`: The index where the new row should be inserted (0 is first row after header)
+    pub fn add_table_row(&mut self, node_index: usize, row_index: usize) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::AddRow(row_index),
+        ));
+        self.execute_command(command)
+    }
+
+    /// Remove a row from an existing table
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row_index`: The index of the row to remove
+    pub fn remove_table_row(
+        &mut self,
+        node_index: usize,
+        row_index: usize,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::RemoveRow(row_index),
+        ));
+        self.execute_command(command)
+    }
+
+    /// Add a column to an existing table
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `column_index`: The index where the new column should be inserted
+    pub fn add_table_column(
+        &mut self,
+        node_index: usize,
+        column_index: usize,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::AddColumn(column_index),
+        ));
+        self.execute_command(command)
+    }
+
+    /// Remove a column from an existing table
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `column_index`: The index of the column to remove
+    pub fn remove_table_column(
+        &mut self,
+        node_index: usize,
+        column_index: usize,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::RemoveColumn(column_index),
+        ));
+        self.execute_command(command)
+    }
+
+    /// Set the content of a table cell
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row`: The row index of the cell (ignored if is_header is true)
+    /// - `column`: The column index of the cell
+    /// - `content`: The new content for the cell
+    /// - `is_header`: Whether the cell is in the header row
+    pub fn set_table_cell(
+        &mut self,
+        node_index: usize,
+        row: usize,
+        column: usize,
+        content: &str,
+        is_header: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetCell {
+                row,
+                column,
+                content: content.to_string(),
+                is_header,
+            },
+        ));
+        self.execute_command(command)
+    }
+
+    /// Set the alignment of a table column
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `column`: The column index
+    /// - `alignment`: The alignment to set
+    pub fn set_table_column_alignment(
+        &mut self,
+        node_index: usize,
+        column: usize,
+        alignment: TableAlignment,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetAlignment { column, alignment },
+        ));
+        self.execute_command(command)
+    }
+
+    /// Group multiple nodes together
+    ///
+    /// - `node_indices`: Indices of nodes to group
+    /// - `group_name`: Name or type of the group
+    pub fn group_nodes(
+        &mut self,
+        node_indices: Vec<usize>,
+        group_name: &str,
+    ) -> Result<(), EditError> {
+        let command = Box::new(GroupNodesCommand::new(
+            self.document.clone(),
+            node_indices,
+            group_name.to_string(),
         ));
         self.execute_command(command)
     }

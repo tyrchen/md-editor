@@ -116,6 +116,15 @@ fn node_to_html(node: &Node) -> String {
 
         Node::ThematicBreak => String::from("<hr>"),
 
+        Node::Group { name, children } => {
+            let mut html = format!("<div class=\"group\" data-name=\"{}\">", html_escape(name));
+            for child in children {
+                html.push_str(&node_to_html(child));
+            }
+            html.push_str("</div>");
+            html
+        }
+
         Node::Table {
             header,
             rows,
