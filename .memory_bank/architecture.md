@@ -285,3 +285,85 @@ Extensibility framework for custom functionality:
   - Careful API design required for extension points
   - Initial refactoring complexity
   - Potential for version compatibility challenges between extensions
+
+## UI Architecture for Markdown Editor
+
+### Overview
+The UI architecture for the markdown editor follows a component-based approach inspired by Slate.js but implemented with Dioxus and Rust. The architecture is built around md-core, which provides the document model, editing operations, and serialization/deserialization capabilities.
+
+### Core Components
+
+#### EditorState
+- Central state management for the editor
+- Contains the active Document from md-core
+- Tracks cursor position and selection
+- Manages undo/redo history
+- Coordinates between the view and controller components
+
+#### DocumentView
+- Top-level component for rendering the Document
+- Delegates rendering to specialized node renderers
+- Manages layout and spacing between nodes
+- Handles drag and drop operations between nodes
+
+#### NodeRenderers
+Specialized components for rendering each type of node:
+- **HeadingRenderer**: Renders heading nodes with appropriate styling
+- **ParagraphRenderer**: Renders paragraph nodes with inline formatting
+- **CodeBlockRenderer**: Renders code blocks with syntax highlighting
+- **ListRenderer**: Renders ordered, unordered, and task lists
+- **TableRenderer**: Renders tables with rows and columns
+- **BlockquoteRenderer**: Renders blockquotes with proper styling
+- **HorizontalRuleRenderer**: Renders horizontal rules
+
+#### InlineRenderers
+Components for rendering inline formatting within nodes:
+- **BoldRenderer**: Renders bold text
+- **ItalicRenderer**: Renders italic text
+- **CodeRenderer**: Renders inline code
+- **StrikethroughRenderer**: Renders strikethrough text
+- **LinkRenderer**: Renders links with proper styling and behavior
+
+#### EditorController
+- Handles keyboard events and user interactions
+- Translates user actions into md-core commands
+- Manages focus and selection state
+- Implements keyboard shortcuts for common operations
+
+### Data Flow
+
+1. **User Interaction** → EditorController
+2. EditorController translates action to md-core Command
+3. Command executes on Document in EditorState
+4. EditorState updates and notifies DocumentView
+5. DocumentView re-renders affected components
+
+### Slate.js-Inspired Architecture
+
+Similar to Slate.js, our architecture follows these principles:
+- **Immutable Document Model**: Each edit creates a new document state
+- **Component-Based Rendering**: Specialized renderers for each node type
+- **Plugin System**: Extensible architecture for custom behaviors
+- **Command Pattern**: All edits are executed as commands with undo support
+- **Selection Model**: Robust selection handling across nodes
+
+### File System Integration
+
+- **FileExplorer**: Component for browsing and selecting files
+- **FileController**: Handles file operations (open, save, create, delete)
+- **FileTree**: Visual representation of directory structure
+- **FileSystemAdapter**: Abstraction over native file system operations
+
+### Styling with Tailwind
+
+- Use Tailwind for consistent styling across components
+- Implement responsive design for different screen sizes
+- Create theme system for light/dark mode support
+- Use utility classes for consistent spacing and typography
+
+### Performance Considerations
+
+- Implement virtualization for rendering large documents
+- Use incremental updates to minimize re-renders
+- Cache parsed documents to improve load times
+- Lazy load components for faster initial rendering
