@@ -113,6 +113,123 @@ impl Document {
         index
     }
 
+    /// Adds a footnote reference to the document
+    pub fn add_footnote_reference(&mut self, label: impl Into<String>) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(Node::footnote_reference(label));
+        index
+    }
+
+    /// Adds a footnote definition to the document
+    pub fn add_footnote_definition(
+        &mut self,
+        label: impl Into<String>,
+        content: impl Into<String>,
+    ) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(Node::footnote_definition(label, content));
+        index
+    }
+
+    /// Adds a complex footnote definition with multiple nodes as content
+    pub fn add_complex_footnote_definition(
+        &mut self,
+        label: impl Into<String>,
+        content: Vec<Node>,
+    ) -> usize {
+        let index = self.nodes.len();
+        self.nodes
+            .push(Node::FootnoteDefinition(crate::FootnoteDefinition {
+                label: label.into(),
+                content,
+            }));
+        index
+    }
+
+    /// Adds a math block to the document
+    pub fn add_math_block(&mut self, math: impl Into<String>) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(Node::math_block(math));
+        index
+    }
+
+    /// Adds a definition list to the document
+    pub fn add_definition_list(&mut self, items: Vec<(String, Vec<String>)>) -> usize {
+        let index = self.nodes.len();
+        self.nodes.push(Node::definition_list(items));
+        index
+    }
+
+    /// Adds a paragraph with inline math expression
+    pub fn add_paragraph_with_math(
+        &mut self,
+        text: impl Into<String>,
+        math: impl Into<String>,
+    ) -> usize {
+        let text_str = text.into();
+        let math_str = math.into();
+
+        let inlines = vec![
+            InlineNode::text(text_str),
+            InlineNode::Math { math: math_str },
+        ];
+
+        self.add_paragraph_with_inlines(inlines)
+    }
+
+    /// Adds a paragraph with emojis
+    pub fn add_paragraph_with_emoji(
+        &mut self,
+        text: impl Into<String>,
+        emoji_shortcode: impl Into<String>,
+    ) -> usize {
+        let text_str = text.into();
+        let emoji_str = emoji_shortcode.into();
+
+        let inlines = vec![
+            InlineNode::text(text_str),
+            InlineNode::Emoji {
+                shortcode: emoji_str,
+            },
+        ];
+
+        self.add_paragraph_with_inlines(inlines)
+    }
+
+    /// Adds a paragraph with user mention
+    pub fn add_paragraph_with_mention(
+        &mut self,
+        text: impl Into<String>,
+        username: impl Into<String>,
+    ) -> usize {
+        let text_str = text.into();
+        let user_str = username.into();
+
+        let inlines = vec![
+            InlineNode::text(text_str),
+            InlineNode::user_mention(user_str),
+        ];
+
+        self.add_paragraph_with_inlines(inlines)
+    }
+
+    /// Adds a paragraph with issue reference
+    pub fn add_paragraph_with_issue(
+        &mut self,
+        text: impl Into<String>,
+        issue: impl Into<String>,
+    ) -> usize {
+        let text_str = text.into();
+        let issue_str = issue.into();
+
+        let inlines = vec![
+            InlineNode::text(text_str),
+            InlineNode::issue_mention(issue_str),
+        ];
+
+        self.add_paragraph_with_inlines(inlines)
+    }
+
     /// Inserts text at the specified location
     pub fn insert_text(
         &mut self,

@@ -52,11 +52,11 @@
 - [ ] Implement `AcceptRejectChangesCommand`
 
 ### Phase 7: Extended Markdown Features
-- [ ] Implement footnotes
-- [ ] Implement definition lists
-- [ ] Add emoji support
-- [ ] Add mentions and references
-- [ ] Add mathematical notation support
+- [x] Implement footnotes
+- [x] Implement definition lists
+- [x] Add emoji support
+- [x] Add mentions and references
+- [x] Add mathematical notation support
 
 ## Notes
 - All commands should follow the Command pattern
