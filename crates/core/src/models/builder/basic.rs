@@ -276,7 +276,11 @@ mod tests {
 
         // Check code block
         match &doc.nodes[3] {
-            Node::CodeBlock { language, code } => {
+            Node::CodeBlock {
+                language,
+                code,
+                properties: _,
+            } => {
                 assert_eq!(language, "rust");
                 assert!(code.contains("println!"));
             }

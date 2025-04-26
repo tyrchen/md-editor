@@ -340,10 +340,12 @@ impl Command for CutSelectionCommand {
                 Node::CodeBlock {
                     code,
                     language: _language,
+                    properties: _properties,
                 },
                 Node::CodeBlock {
                     code: orig_code,
                     language: orig_language,
+                    properties: orig_properties,
                 },
             ) => {
                 // For code blocks, just cut the selected text
@@ -360,8 +362,9 @@ impl Command for CutSelectionCommand {
                 // Store the cut content
                 let cut_text = orig_code[start_offset..end_offset].to_string();
                 let cut_node = Node::CodeBlock {
-                    code: cut_text,
                     language: orig_language.clone(),
+                    code: cut_text,
+                    properties: orig_properties.clone(),
                 };
                 self.cut_content = vec![cut_node];
 

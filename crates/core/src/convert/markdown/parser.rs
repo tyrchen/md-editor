@@ -1,6 +1,6 @@
 use crate::{
-    Document, FootnoteDefinition, InlineNode, ListItem, ListType, Node, ParseError, TableAlignment,
-    TableCell, TableProperties, TextFormatting, TextNode,
+    CodeBlockProperties, Document, FootnoteDefinition, InlineNode, ListItem, ListType, Node,
+    ParseError, TableAlignment, TableCell, TableProperties, TextFormatting, TextNode,
 };
 use pulldown_cmark::{
     Alignment, CodeBlockKind, Event, HeadingLevel, LinkType, /* LinkType, */ Options, Parser,
@@ -598,8 +598,12 @@ pub(crate) fn parse_markdown(markdown: &str) -> Result<Document, ParseError> {
 
                             stack.in_code_block = false;
 
-                            // Create the CodeBlock node
-                            let code_block = Node::CodeBlock { language, code };
+                            // Create the CodeBlock node with default properties
+                            let code_block = Node::CodeBlock {
+                                language,
+                                code,
+                                properties: CodeBlockProperties::default(),
+                            };
                             stack.current_nodes().push(code_block);
                         } else {
                             eprintln!("Warning: CodeBlock end without CodeBlock context");

@@ -1,5 +1,6 @@
 use crate::editor::command::Command;
-use crate::{Document, EditError, InlineNode, Node};
+use crate::error::EditError;
+use crate::models::{CodeBlockProperties, Document, InlineNode, Node};
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -66,8 +67,9 @@ impl InsertNodeCommand {
             document,
             position,
             Node::CodeBlock {
-                code: code.to_string(),
                 language: language.to_string(),
+                code: code.to_string(),
+                properties: CodeBlockProperties::default(),
             },
         )
     }

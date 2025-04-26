@@ -30,7 +30,7 @@
 - [x] Plan GitHub Flavored Markdown (GFM) implementation
 - [x] Implement enhanced table functionality
 - [x] Implement autolinks
-- [ ] Improve task list interactivity
+- [x] Improve task list interactivity
 - [ ] Enhance code blocks with language-specific features
 
 ## In Progress Tasks

@@ -101,14 +101,35 @@ fn node_to_markdown(node: &Node) -> String {
             markdown
         }
 
-        Node::CodeBlock { language, code } => {
-            let lang_str = if !language.is_empty() {
-                format!("```{}", language)
-            } else {
-                "```".to_string()
-            };
+        Node::CodeBlock {
+            language,
+            code,
+            properties: _,
+        } => {
+            let mut markdown = String::new();
 
-            format!("{}\n{}\n```", lang_str, code)
+            if !language.is_empty() {
+                // Start a fenced code block with language
+                markdown.push_str("```");
+                markdown.push_str(language);
+                markdown.push('\n');
+            } else {
+                // Start a fenced code block without language
+                markdown.push_str("```\n");
+            }
+
+            // Add the code content
+            markdown.push_str(code);
+
+            // If the code doesn't end with a newline, add one
+            if !code.ends_with('\n') {
+                markdown.push('\n');
+            }
+
+            // End the code block
+            markdown.push_str("```");
+
+            markdown
         }
 
         Node::BlockQuote { children } => {
@@ -400,6 +421,24 @@ mod tests {
         Document, FootnoteDefinition, InlineNode, ListType, Node, TableCell, TableProperties,
         TextFormatting, TextNode,
     };
+
+    fn get_node_type_short(node: &Node) -> &'static str {
+        match node {
+            Node::Heading { .. } => "heading",
+            Node::Paragraph { .. } => "paragraph",
+            Node::List { .. } => "list",
+            Node::CodeBlock { .. } => "code_block",
+            Node::BlockQuote { .. } => "blockquote",
+            Node::ThematicBreak => "thematic_break",
+            Node::Table { .. } => "table",
+            Node::Group { .. } => "group",
+            Node::FootnoteReference(_) => "footnote_reference",
+            Node::FootnoteDefinition(_) => "footnote_definition",
+            Node::DefinitionList { .. } => "definition_list",
+            Node::MathBlock { .. } => "math_block",
+            Node::TempListItem(_) | Node::TempTableCell(_) => "temp",
+        }
+    }
 
     // Helper to create a basic document (can reuse from html tests or serialization)
     fn create_test_document() -> Document {
@@ -824,16 +863,20 @@ No language specified
             "No language specified",
         ];
 
-        for (i, (expected_lang, expected_code)) in langs.iter().zip(codes.iter()).enumerate() {
+        for i in 0..langs.len() {
             match &doc.nodes[i] {
-                Node::CodeBlock { language, code } => {
+                Node::CodeBlock {
+                    language,
+                    code,
+                    properties: _,
+                } => {
                     assert_eq!(
-                        language, expected_lang,
+                        language, &langs[i],
                         "Code block {} should have language {}",
-                        i, expected_lang
+                        i, langs[i]
                     );
                     assert_eq!(
-                        code, expected_code,
+                        code, &codes[i],
                         "Code block {} should contain expected code",
                         i
                     );
@@ -975,41 +1018,8 @@ fn main() {
 
         // Verify structure by node types
         for (i, (node1, node2)) in doc1.nodes.iter().zip(doc2.nodes.iter()).enumerate() {
-            let type1 = match node1 {
-                Node::Heading { .. } => "heading",
-                Node::Paragraph { .. } => "paragraph",
-                Node::BlockQuote { .. } => "blockquote",
-                Node::List {
-                    list_type: ListType::Unordered,
-                    ..
-                } => "unordered_list",
-                Node::List {
-                    list_type: ListType::Ordered,
-                    ..
-                } => "ordered_list",
-                Node::CodeBlock { .. } => "code_block",
-                Node::ThematicBreak => "thematic_break",
-                Node::Table { .. } => "table",
-                _ => "other",
-            };
-
-            let type2 = match node2 {
-                Node::Heading { .. } => "heading",
-                Node::Paragraph { .. } => "paragraph",
-                Node::BlockQuote { .. } => "blockquote",
-                Node::List {
-                    list_type: ListType::Unordered,
-                    ..
-                } => "unordered_list",
-                Node::List {
-                    list_type: ListType::Ordered,
-                    ..
-                } => "ordered_list",
-                Node::CodeBlock { .. } => "code_block",
-                Node::ThematicBreak => "thematic_break",
-                Node::Table { .. } => "table",
-                _ => "other",
-            };
+            let type1 = get_node_type_short(node1);
+            let type2 = get_node_type_short(node2);
 
             println!("Node {}: type1={}, type2={}", i, type1, type2);
 

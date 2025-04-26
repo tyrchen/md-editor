@@ -96,18 +96,100 @@ fn node_to_html(node: &Node, _indent: usize) -> Result<String, ParseError> {
             Ok(html)
         }
 
-        Node::CodeBlock { language, code } => {
-            let lang_attr = if !language.is_empty() {
-                format!(" class=\"language-{}\"", language)
+        Node::CodeBlock {
+            language,
+            code,
+            properties,
+        } => {
+            let mut classes = Vec::new();
+
+            // Add language class
+            if !language.is_empty() {
+                classes.push(format!("language-{}", language));
+            }
+
+            // Add custom class if specified
+            if let Some(css_class) = &properties.css_class {
+                classes.push(css_class.clone());
+            }
+
+            // Add line-numbers class if enabled
+            if properties.show_line_numbers {
+                classes.push("line-numbers".to_string());
+            }
+
+            // Create the class attribute if we have classes
+            let class_attr = if !classes.is_empty() {
+                format!(" class=\"{}\"", classes.join(" "))
             } else {
                 String::new()
             };
 
-            Ok(format!(
-                "<pre><code{}>{}</code></pre>",
-                lang_attr,
-                html_escape(code)
-            ))
+            // Build additional data attributes
+            let mut data_attrs = Vec::new();
+
+            // Add line numbering start attribute if showing line numbers
+            if properties.show_line_numbers && properties.start_line > 1 {
+                data_attrs.push(format!("data-start=\"{}\"", properties.start_line));
+            }
+
+            // Add theme if specified
+            if let Some(theme) = &properties.theme {
+                data_attrs.push(format!("data-theme=\"{}\"", theme));
+            }
+
+            // Add line highlighting if specified
+            if let Some(highlight_lines) = &properties.highlight_lines {
+                let line_numbers = highlight_lines
+                    .iter()
+                    .map(|line| line.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+
+                data_attrs.push(format!("data-line=\"{}\"", line_numbers));
+            }
+
+            // Add copy button attribute
+            data_attrs.push(format!(
+                "data-copy-button=\"{}\"",
+                properties.show_copy_button
+            ));
+
+            // Create the data attributes string
+            let data_attrs_str = if !data_attrs.is_empty() {
+                format!(" {}", data_attrs.join(" "))
+            } else {
+                String::new()
+            };
+
+            // Add style attribute if specified
+            let style_attr = if let Some(style) = &properties.style {
+                format!(" style=\"{}\"", style)
+            } else {
+                String::new()
+            };
+
+            // Add max-height style if specified
+            let container_style = if let Some(max_height) = &properties.max_height {
+                format!(" style=\"max-height:{}; overflow:auto;\"", max_height)
+            } else {
+                String::new()
+            };
+
+            // Generate pre and code tags with attributes
+            let html = if properties.max_height.is_some() {
+                format!(
+                    "<div class=\"code-container\"{container_style}><pre{style_attr}><code{class_attr}{data_attrs_str}>{}</code></pre></div>",
+                    html_escape(code)
+                )
+            } else {
+                format!(
+                    "<pre{style_attr}><code{class_attr}{data_attrs_str}>{}</code></pre>",
+                    html_escape(code)
+                )
+            };
+
+            Ok(html)
         }
 
         Node::BlockQuote { children } => {
@@ -544,8 +626,8 @@ fn from_html(html: &str) -> Result<Document, ParseError> {
 mod tests {
     use super::*;
     use crate::{
-        Document, InlineNode, ListType, Node, TableAlignment, TableCell, TableProperties,
-        TextFormatting, TextNode,
+        CodeBlockProperties, Document, InlineNode, ListType, Node, TableAlignment, TableCell,
+        TableProperties, TextFormatting, TextNode,
     };
 
     // Helper function to create a test document (can be adapted from serialization.rs)
@@ -591,7 +673,7 @@ mod tests {
 
         assert!(html.contains("<h1>Test Document</h1>"));
         assert!(html.contains("<p>Simple paragraph.</p>"));
-        assert!(html.contains("<pre><code class=\"language-rust\">"));
+        assert!(html.contains("<pre><code class=\"language-rust\" data-copy-button=\"true\">"));
         assert!(html.contains("println!(&quot;Hello&quot;);"));
 
         // Fix: Check for list items with paragraphs, which seems to be the actual format
@@ -674,9 +756,16 @@ mod tests {
 
         assert_eq!(doc.nodes.len(), 1);
         match &doc.nodes[0] {
-            Node::CodeBlock { language, code } => {
+            Node::CodeBlock {
+                language,
+                code,
+                properties,
+            } => {
                 assert_eq!(language, "python");
                 assert!(code.contains("print(\"Hello\")"));
+                // Default properties should be used
+                assert!(!properties.show_line_numbers);
+                assert!(properties.theme.is_none());
             }
             _ => panic!("Expected code block"),
         }
@@ -947,5 +1036,60 @@ mod tests {
         }
 
         assert!(found_blockquote, "Should have found a blockquote node");
+    }
+
+    #[test]
+    fn test_enhanced_code_blocks() {
+        let mut doc = Document::new();
+
+        // Basic code block
+        doc.add_code_block("console.log('test');", "javascript");
+
+        // Code block with line numbers
+        let props = CodeBlockProperties {
+            show_line_numbers: true,
+            start_line: 10,
+            ..Default::default()
+        };
+        doc.nodes.push(Node::CodeBlock {
+            language: "python".to_string(),
+            code: "def hello():\n    print('world')".to_string(),
+            properties: props,
+        });
+
+        // Code block with highlighted lines and theme
+        let props = CodeBlockProperties {
+            show_line_numbers: true,
+            highlight_lines: Some(vec![2, 4]),
+            theme: Some("dracula".to_string()),
+            max_height: Some("300px".to_string()),
+            ..Default::default()
+        };
+        doc.nodes.push(Node::CodeBlock {
+            language: "rust".to_string(),
+            code: "fn main() {\n    println!(\"Hello\");\n}".to_string(),
+            properties: props,
+        });
+
+        let html = to_html(&doc);
+
+        // Test for basic code block
+        assert!(
+            html.contains("<pre><code class=\"language-javascript\" data-copy-button=\"true\">")
+        );
+
+        // Test for line numbers
+        assert!(html.contains("class=\"language-python line-numbers\""));
+        assert!(html.contains("data-start=\"10\""));
+
+        // Test for highlighted lines, theme, and max-height
+        assert!(html.contains("class=\"language-rust line-numbers\""));
+        assert!(html.contains("data-line=\"2,4\""));
+        assert!(html.contains("data-theme=\"dracula\""));
+        assert!(
+            html.contains(
+                "<div class=\"code-container\" style=\"max-height:300px; overflow:auto;\">"
+            )
+        );
     }
 }

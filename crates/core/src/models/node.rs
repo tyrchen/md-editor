@@ -427,6 +427,117 @@ impl DefinitionItem {
     }
 }
 
+/// Properties for advanced code block rendering
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CodeBlockProperties {
+    /// Whether to show line numbers
+    #[serde(default = "default_false")]
+    pub show_line_numbers: bool,
+
+    /// The theme to use for syntax highlighting
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme: Option<String>,
+
+    /// The starting line number (when line numbers are shown)
+    #[serde(default = "default_line_number")]
+    pub start_line: u32,
+
+    /// Whether to highlight specific lines
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight_lines: Option<Vec<u32>>,
+
+    /// Whether to enable the copy button
+    #[serde(default = "default_true")]
+    pub show_copy_button: bool,
+
+    /// Custom CSS class for the code block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub css_class: Option<String>,
+
+    /// Custom CSS style for the code block
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
+
+    /// Maximum height before scrolling (e.g., "500px")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_height: Option<String>,
+}
+
+/// Returns the default starting line number (1)
+fn default_line_number() -> u32 {
+    1
+}
+
+impl Default for CodeBlockProperties {
+    fn default() -> Self {
+        Self {
+            show_line_numbers: false,
+            theme: None,
+            start_line: default_line_number(),
+            highlight_lines: None,
+            show_copy_button: true,
+            css_class: None,
+            style: None,
+            max_height: None,
+        }
+    }
+}
+
+impl CodeBlockProperties {
+    /// Create a new default CodeBlockProperties
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set whether to show line numbers
+    pub fn with_line_numbers(mut self, show: bool) -> Self {
+        self.show_line_numbers = show;
+        self
+    }
+
+    /// Set the highlighting theme
+    pub fn with_theme(mut self, theme: impl Into<String>) -> Self {
+        self.theme = Some(theme.into());
+        self
+    }
+
+    /// Set the starting line number
+    pub fn with_start_line(mut self, line: u32) -> Self {
+        self.start_line = line;
+        self
+    }
+
+    /// Set which lines to highlight
+    pub fn with_highlight_lines(mut self, lines: Vec<u32>) -> Self {
+        self.highlight_lines = Some(lines);
+        self
+    }
+
+    /// Set whether to show the copy button
+    pub fn with_copy_button(mut self, show: bool) -> Self {
+        self.show_copy_button = show;
+        self
+    }
+
+    /// Set a custom CSS class
+    pub fn with_css_class(mut self, class: impl Into<String>) -> Self {
+        self.css_class = Some(class.into());
+        self
+    }
+
+    /// Set custom CSS styles
+    pub fn with_style(mut self, style: impl Into<String>) -> Self {
+        self.style = Some(style.into());
+        self
+    }
+
+    /// Set maximum height before scrolling
+    pub fn with_max_height(mut self, height: impl Into<String>) -> Self {
+        self.max_height = Some(height.into());
+        self
+    }
+}
+
 /// Represents a block-level node in the document
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -463,6 +574,9 @@ pub enum Node {
         language: String,
         /// The code content
         code: String,
+        /// Advanced code block properties for rendering
+        #[serde(default)]
+        properties: CodeBlockProperties,
     },
 
     /// A block quote
@@ -563,6 +677,20 @@ impl Node {
         Self::CodeBlock {
             language: language.into(),
             code: code.into(),
+            properties: CodeBlockProperties::default(),
+        }
+    }
+
+    /// Creates a new code block with custom properties
+    pub fn code_block_with_properties(
+        code: impl Into<String>,
+        language: impl Into<String>,
+        properties: CodeBlockProperties,
+    ) -> Self {
+        Self::CodeBlock {
+            language: language.into(),
+            code: code.into(),
+            properties,
         }
     }
 
@@ -790,7 +918,19 @@ impl Node {
     /// Returns this node as a code block if it is one
     pub fn as_code_block(&self) -> Option<(&str, &str)> {
         match self {
-            Self::CodeBlock { language, code } => Some((language, code)),
+            Self::CodeBlock { language, code, .. } => Some((language, code)),
+            _ => None,
+        }
+    }
+
+    /// Get a reference to a code block's contents and properties
+    pub fn as_code_block_with_properties(&self) -> Option<(&str, &str, &CodeBlockProperties)> {
+        match self {
+            Self::CodeBlock {
+                language,
+                code,
+                properties,
+            } => Some((language, code, properties)),
             _ => None,
         }
     }

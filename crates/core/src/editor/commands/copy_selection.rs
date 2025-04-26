@@ -94,23 +94,17 @@ impl Command for CopySelectionCommand {
                         self.copied_nodes.push(node.clone());
                     }
                 }
-                Node::CodeBlock { language, code } => {
-                    // Extract the selected portion of code
-                    if selection.start.path.len() > 1 && selection.end.path.len() > 1 {
-                        let start_pos = selection.start.path[1];
-                        let end_pos = selection.end.path[1];
-
-                        if start_pos < code.len() && end_pos <= code.len() {
-                            let selected_code = code[start_pos..end_pos].to_string();
-                            self.copied_nodes.push(Node::CodeBlock {
-                                language: language.clone(),
-                                code: selected_code,
-                            });
-                        }
-                    } else {
-                        // Copy the entire code block
-                        self.copied_nodes.push(node.clone());
-                    }
+                Node::CodeBlock {
+                    language,
+                    code,
+                    properties,
+                } => {
+                    // Deep-copy code block
+                    self.copied_nodes.push(Node::CodeBlock {
+                        language: language.clone(),
+                        code: code.clone(),
+                        properties: properties.clone(),
+                    });
                 }
                 // Handle other node types by copying them entirely
                 _ => {
