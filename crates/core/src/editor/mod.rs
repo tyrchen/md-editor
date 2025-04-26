@@ -578,6 +578,108 @@ impl Editor {
         ));
         self.execute_command(command)
     }
+
+    /// Selects all content in the document
+    pub fn select_all(&mut self) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.select_all() {
+            return Err(EditError::OperationFailed);
+        }
+        Ok(())
+    }
+
+    /// Selects a specific node by index
+    pub fn select_node(&mut self, node_index: usize) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.select_node(node_index) {
+            return Err(EditError::IndexOutOfBounds);
+        }
+        Ok(())
+    }
+
+    /// Selects a range of nodes
+    pub fn select_node_range(
+        &mut self,
+        start_index: usize,
+        end_index: usize,
+    ) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.select_node_range(start_index, end_index) {
+            return Err(EditError::InvalidRange);
+        }
+        Ok(())
+    }
+
+    /// Selects a specific range of text within a node
+    pub fn select_text_range(
+        &mut self,
+        node_index: usize,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.select_text_range(node_index, start_offset, end_offset) {
+            return Err(EditError::InvalidRange);
+        }
+        Ok(())
+    }
+
+    /// Selects from one position to another across any nodes
+    pub fn select_range(
+        &mut self,
+        start_node: usize,
+        start_offset: usize,
+        end_node: usize,
+        end_offset: usize,
+    ) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.select_range(start_node, start_offset, end_node, end_offset) {
+            return Err(EditError::InvalidRange);
+        }
+        Ok(())
+    }
+
+    /// Collapses the current selection to its start position
+    pub fn collapse_selection_to_start(&mut self) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.collapse_selection_to_start() {
+            return Err(EditError::Other("No selection to collapse".to_string()));
+        }
+        Ok(())
+    }
+
+    /// Collapses the current selection to its end position
+    pub fn collapse_selection_to_end(&mut self) -> Result<(), EditError> {
+        let mut document = self.document.borrow_mut();
+        if !document.collapse_selection_to_end() {
+            return Err(EditError::Other("No selection to collapse".to_string()));
+        }
+        Ok(())
+    }
+
+    /// Clears the current selection
+    pub fn clear_selection(&mut self) {
+        let mut document = self.document.borrow_mut();
+        document.clear_selection();
+    }
+
+    /// Returns whether there is currently a selection
+    pub fn has_selection(&self) -> bool {
+        let document = self.document.borrow();
+        document.has_selection()
+    }
+
+    /// Returns whether the current selection spans multiple nodes
+    pub fn has_multi_node_selection(&self) -> bool {
+        let document = self.document.borrow();
+        document.has_multi_node_selection()
+    }
+
+    /// Gets the currently selected text, if any
+    pub fn get_selected_text(&self) -> Option<String> {
+        let document = self.document.borrow();
+        document.get_selected_text()
+    }
 }
 
 #[cfg(test)]

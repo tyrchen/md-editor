@@ -1,9 +1,11 @@
+mod builder;
 mod document;
 mod formatting;
 mod inline;
 mod node;
 mod selection;
 
+pub use builder::DocumentBuilder;
 pub use document::*;
 pub use formatting::TextFormatting;
 pub use inline::{InlineNode, TextNode};
@@ -626,5 +628,25 @@ mod test {
         let json = Text::<Json>::try_from(&doc).unwrap();
         let doc4 = Document::try_from(json).unwrap();
         assert_eq!(doc, doc4);
+    }
+}
+
+#[cfg(test)]
+mod test_imports {
+    use crate::{DocumentBuilder, Markdown, Text};
+    use std::convert::TryInto;
+
+    #[test]
+    fn test_builder_exported() {
+        // This test ensures the DocumentBuilder is correctly exported
+        let doc = DocumentBuilder::new()
+            .title("Test Title")
+            .paragraph("Test paragraph")
+            .build();
+
+        assert_eq!(doc.nodes.len(), 2);
+
+        // Verify we can convert the document to markdown
+        let _markdown: Result<Text<Markdown>, _> = (&doc).try_into();
     }
 }

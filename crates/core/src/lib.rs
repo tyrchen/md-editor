@@ -13,6 +13,8 @@ It allows representing, manipulating, and serializing hierarchical markdown docu
 - Serialization and deserialization to/from JSON
 - Conversion to/from markdown and HTML formats
 - Editing operations (insert, split, etc.)
+- Fluent builder API for document creation
+- Simplified selection API with helper methods
 
 ## Basic Example
 
@@ -33,6 +35,58 @@ let html: Text<Html> = doc.as_ref().try_into().unwrap();
 let json: Text<Json> = doc.as_ref().try_into().unwrap();
 
 println!("{}", markdown);
+```
+
+## Builder Pattern Example
+
+```rust
+use md_core::{DocumentBuilder, Text, Markdown};
+use std::convert::TryInto;
+
+// Create a document using the fluent builder API
+let doc = DocumentBuilder::new()
+    .title("My Document")
+    .paragraph("This is a paragraph in the document.")
+    .code_block("println!(\"Hello, world!\");", "rust")
+    .build();
+
+// Convert to markdown
+let markdown: Text<Markdown> = (&doc).try_into().unwrap();
+println!("{}", markdown);
+```
+
+## Selection API Example
+
+```rust
+use md_core::Document;
+
+// Create a document
+let mut doc = Document::new();
+doc.add_heading(1, "Selection Example");
+doc.add_paragraph_with_text("This is a paragraph.");
+doc.add_paragraph_with_text("This is another paragraph.");
+
+// Select all content
+doc.select_all();
+
+// Select a specific node
+doc.select_node(1);
+
+// Select text within a node
+doc.select_text_range(1, 5, 15);
+
+// Get selected text
+if let Some(text) = doc.get_selected_text() {
+    println!("Selected text: {}", text);
+}
+
+// Check selection state
+if doc.has_multi_node_selection() {
+    println!("Selection spans multiple nodes");
+}
+
+// Collapse selection to cursor
+doc.collapse_selection_to_start();
 ```
 
 ## Data Structure
