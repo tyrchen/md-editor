@@ -1,41 +1,56 @@
 # Active Context: md-core
 
 ## Current Focus
-Currently working on planning enhanced Markdown support, with a specific focus on GitHub Flavored Markdown (GFM) and improved table functionality.
+Implementing GitHub Flavored Markdown (GFM) features, with a focus now shifting to autolinks and task list interactivity after successfully completing enhanced table functionality.
 
-### Planning for Enhanced Markdown Support
-A comprehensive plan has been developed for implementing:
-1. **GitHub Flavored Markdown (GFM) Features**:
-   - Enhanced tables with alignment, spanning, and formatting
-   - Interactive task lists
-   - Improved strikethrough support
+### Recently Completed: Enhanced Table Support
+Enhanced table functionality has been successfully implemented with the following features:
+- Cell spanning (rowspan/colspan)
+- Row & column alignment with extended options
+- Advanced table styling properties (borders, striped rows, etc.)
+- Cell styling (background colors, custom styles)
+- Header vs. data cell distinction
+- Table caption support
+- CSS class integration
+- Enhanced HTML serialization
+
+### Ongoing Implementation for GFM Support
+Further implementation of GitHub Flavored Markdown features is continuing with:
+1. **Next Features to Implement**:
    - Autolinks
-   - Enhanced code blocks
+   - Interactive task lists
+   - Enhanced code blocks with language-specific features
 
-2. **Extended Markdown Features**:
-   - Footnotes
-   - Definition lists
-   - Emoji support
-   - Mentions and references
-   - Mathematical notation
-
-3. **Implementation Strategy**:
-   - Four-phase approach over an estimated 8 weeks
+2. **Implementation Strategy**:
    - Integration with external libraries (pulldown-cmark, html5ever)
    - Comprehensive testing strategy for new features
 
+### Implementation Progress
+Core features have been successfully implemented:
+
+1. **Document Structure**:
+   - Basic document structure (Document, Node, InlineNode)
+   - Rich text formatting (bold, italic, code, strikethrough)
+   - Lists (ordered, unordered, tasks)
+   - Enhanced table support with styling and formatting
+   - Code blocks with language support
+
+2. **Commands**:
+   - Content insertion commands
+   - Selection-based operations
+   - Advanced document structure operations (tables, grouping, TOC)
+   - Enhanced table operations with styling capabilities
+
+3. **Serialization**:
+   - JSON serialization/deserialization
+   - Markdown output serialization
+   - HTML output serialization with enhanced table support
+
 ### Previous Work
 Work on error handling in the codebase has been completed:
-
-1. **Basic Error Handling** (`examples/error_handling.rs`):
-   - Shows direct use of ParseError
-   - Demonstrates error matching, propagation with `?`, and custom error creation
-   - Focus on simple, straightforward error handling
-
-2. **Advanced Error Handling** (`examples/advanced_error_handling.rs`):
-   - Shows integration with thiserror for application-level error types
-   - Demonstrates error conversion, context, and structured error handling
-   - Implements a small DocumentManager to show real-world usage patterns
+- Basic error types for parsing
+- JSON error conversion
+- Error handling examples
 
 Clippy lint warnings throughout the codebase have been fixed:
 - Added `#[allow(dead_code)]` for potentially useful functions
@@ -45,7 +60,8 @@ Clippy lint warnings throughout the codebase have been fixed:
 - Leveraged #[derive(Default)] instead of manual implementation
 
 ## Immediate Next Steps
-- Begin implementation of core GFM features according to the plan
-- Research integration with pulldown-cmark for Markdown parsing
-- Develop enhanced table model with alignment and spanning support
-- Create tests for new GFM functionality
+1. Implement autolinks support following GFM specification
+2. Improve task list interactivity
+3. Enhance code blocks with language-specific features
+4. Research and prepare for integration with pulldown-cmark for Markdown parsing
+5. Create unit tests for new GFM functionality

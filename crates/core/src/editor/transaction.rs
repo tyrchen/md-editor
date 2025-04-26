@@ -1,13 +1,9 @@
+use super::{NodeConversionType, command::*};
+use crate::editor::command::Command as EditorCommand;
+use crate::editor::commands::*;
+use crate::{Document, EditError, Node, Position, Selection, TableProperties, TextFormatting};
 use std::cell::RefCell;
 use std::rc::Rc;
-
-use crate::TextFormatting;
-use crate::editor::NodeConversionType;
-use crate::editor::command::Command as EditorCommand;
-use crate::editor::command::{DeleteTextCommand, MergeNodesCommand};
-use crate::editor::commands::*;
-use crate::error::EditError;
-use crate::{Document, Node, Position, Selection};
 
 /// A transaction that groups multiple document operations together as a single atomic change.
 ///
@@ -189,8 +185,18 @@ impl Transaction {
         rows: usize,
         with_header: bool,
     ) -> &mut Self {
-        let command =
-            CreateTableCommand::new(self.document.clone(), position, columns, rows, with_header);
+        let properties = TableProperties {
+            has_header: with_header,
+            ..Default::default()
+        };
+
+        let command = CreateTableCommand::with_properties(
+            self.document.clone(),
+            position,
+            columns,
+            rows,
+            properties,
+        );
         self.add_command(command);
         self
     }

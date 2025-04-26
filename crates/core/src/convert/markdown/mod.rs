@@ -152,6 +152,7 @@ fn node_to_markdown(node: &Node) -> String {
             header,
             rows,
             alignments,
+            ..
         } => {
             let mut markdown = String::new();
 
@@ -194,6 +195,13 @@ fn node_to_markdown(node: &Node) -> String {
                         markdown.push(':');
                     }
                     TableAlignment::None => {
+                        markdown.push_str(&"-".repeat(8));
+                    }
+                    // Handle all other variants as default alignment
+                    TableAlignment::Justify
+                    | TableAlignment::Top
+                    | TableAlignment::Middle
+                    | TableAlignment::Bottom => {
                         markdown.push_str(&"-".repeat(8));
                     }
                 }
@@ -387,8 +395,8 @@ fn inline_to_markdown(inline: &InlineNode) -> String {
 mod tests {
     use super::*;
     use crate::{
-        Document, FootnoteDefinition, InlineNode, ListType, Node, TableCell, TextFormatting,
-        TextNode,
+        Document, FootnoteDefinition, InlineNode, ListType, Node, TableCell, TableProperties,
+        TextFormatting, TextNode,
     };
 
     // Helper to create a basic document (can reuse from html tests or serialization)
@@ -474,6 +482,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         });
 
         let md = to_markdown(&doc);

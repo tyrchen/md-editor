@@ -1,7 +1,7 @@
 use crate::InlineNode;
 use serde::{Deserialize, Serialize};
 
-/// Table column alignment
+/// Alignment options for table columns
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TableAlignment {
@@ -13,11 +13,121 @@ pub enum TableAlignment {
     Right,
     /// Default alignment
     None,
+    /// Text justify alignment
+    Justify,
+    /// Top vertical alignment
+    Top,
+    /// Middle vertical alignment
+    Middle,
+    /// Bottom vertical alignment
+    Bottom,
 }
 
 impl Default for TableAlignment {
     fn default() -> Self {
         Self::None
+    }
+}
+
+/// Properties for table styling and behavior
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableProperties {
+    /// Whether the table has a header
+    #[serde(default = "default_true")]
+    pub has_header: bool,
+    /// Whether to render the table with borders
+    #[serde(default = "default_true")]
+    pub has_borders: bool,
+    /// Whether rows should have alternating background colors
+    #[serde(default = "default_false")]
+    pub striped_rows: bool,
+    /// Whether table cells should be highlighted on hover
+    #[serde(default = "default_false")]
+    pub hoverable: bool,
+    /// Custom CSS class for the table
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub css_class: Option<String>,
+    /// Custom CSS style for the table
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
+    /// Caption for the table (shown at the top or bottom)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caption: Option<String>,
+    /// Whether the caption should be displayed at the bottom
+    #[serde(default = "default_false")]
+    pub caption_at_bottom: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+impl Default for TableProperties {
+    fn default() -> Self {
+        Self {
+            has_header: true,
+            has_borders: true,
+            striped_rows: false,
+            hoverable: false,
+            css_class: None,
+            style: None,
+            caption: None,
+            caption_at_bottom: false,
+        }
+    }
+}
+
+impl TableProperties {
+    /// Create a new TableProperties with default values
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set whether the table has a header row
+    pub fn with_header(mut self, has_header: bool) -> Self {
+        self.has_header = has_header;
+        self
+    }
+
+    /// Set whether the table has visible borders
+    pub fn with_borders(mut self, has_borders: bool) -> Self {
+        self.has_borders = has_borders;
+        self
+    }
+
+    /// Set whether the table has striped rows
+    pub fn with_striped_rows(mut self, striped_rows: bool) -> Self {
+        self.striped_rows = striped_rows;
+        self
+    }
+
+    /// Set whether the table has hover effects
+    pub fn with_hover(mut self, hoverable: bool) -> Self {
+        self.hoverable = hoverable;
+        self
+    }
+
+    /// Set the CSS class for the table
+    pub fn with_css_class(mut self, css_class: impl Into<String>) -> Self {
+        self.css_class = Some(css_class.into());
+        self
+    }
+
+    /// Set custom CSS style for the table
+    pub fn with_style(mut self, style: impl Into<String>) -> Self {
+        self.style = Some(style.into());
+        self
+    }
+
+    /// Set the caption for the table
+    pub fn with_caption(mut self, caption: impl Into<String>, at_bottom: bool) -> Self {
+        self.caption = Some(caption.into());
+        self.caption_at_bottom = at_bottom;
+        self
     }
 }
 
@@ -87,6 +197,21 @@ pub struct TableCell {
     /// Number of rows this cell spans
     #[serde(default = "default_span", skip_serializing_if = "is_default_span")]
     pub rowspan: u32,
+    /// Background color in hex format (e.g., "#f5f5f5")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub background_color: Option<String>,
+    /// Custom CSS class names
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub css_class: Option<String>,
+    /// Custom styles as CSS properties
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub style: Option<String>,
+    /// Whether this is a header cell (th vs td)
+    #[serde(
+        default = "default_is_header",
+        skip_serializing_if = "is_default_is_header"
+    )]
+    pub is_header: bool,
 }
 
 fn default_span() -> u32 {
@@ -97,6 +222,14 @@ fn is_default_span(span: &u32) -> bool {
     *span == 1
 }
 
+fn default_is_header() -> bool {
+    false
+}
+
+fn is_default_is_header(is_header: &bool) -> bool {
+    !(*is_header)
+}
+
 impl TableCell {
     /// Creates a new table cell with the given content
     pub fn new(content: Vec<InlineNode>) -> Self {
@@ -104,6 +237,10 @@ impl TableCell {
             content,
             colspan: 1,
             rowspan: 1,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
         }
     }
 
@@ -113,6 +250,10 @@ impl TableCell {
             content: vec![InlineNode::text(text)],
             colspan: 1,
             rowspan: 1,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
         }
     }
 
@@ -122,6 +263,10 @@ impl TableCell {
             content,
             colspan,
             rowspan: 1,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
         }
     }
 
@@ -131,6 +276,10 @@ impl TableCell {
             content,
             colspan: 1,
             rowspan,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
         }
     }
 
@@ -140,6 +289,61 @@ impl TableCell {
             content,
             colspan,
             rowspan,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
+        }
+    }
+
+    /// Creates a header cell with text content
+    pub fn header(text: impl Into<String>) -> Self {
+        Self {
+            content: vec![InlineNode::text(text)],
+            colspan: 1,
+            rowspan: 1,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: true,
+        }
+    }
+
+    /// Set background color for the cell
+    pub fn with_background_color(mut self, color: impl Into<String>) -> Self {
+        self.background_color = Some(color.into());
+        self
+    }
+
+    /// Set CSS class for the cell
+    pub fn with_css_class(mut self, class: impl Into<String>) -> Self {
+        self.css_class = Some(class.into());
+        self
+    }
+
+    /// Set custom CSS style for the cell
+    pub fn with_style(mut self, style: impl Into<String>) -> Self {
+        self.style = Some(style.into());
+        self
+    }
+
+    /// Set whether this is a header cell
+    pub fn with_header(mut self, is_header: bool) -> Self {
+        self.is_header = is_header;
+        self
+    }
+}
+
+impl Default for TableCell {
+    fn default() -> Self {
+        Self {
+            content: vec![InlineNode::text("")],
+            colspan: 1,
+            rowspan: 1,
+            background_color: None,
+            css_class: None,
+            style: None,
+            is_header: false,
         }
     }
 }
@@ -281,6 +485,9 @@ pub enum Node {
         rows: Vec<Vec<TableCell>>,
         /// Column alignments
         alignments: Vec<TableAlignment>,
+        /// Table styling and behavior properties
+        #[serde(default)]
+        properties: TableProperties,
     },
 
     /// A group of nodes treated as a single unit
@@ -326,6 +533,7 @@ pub type TableComponents<'a> = (
     &'a Vec<TableCell>,
     &'a Vec<Vec<TableCell>>,
     &'a Vec<TableAlignment>,
+    &'a TableProperties,
 );
 
 impl Node {
@@ -431,6 +639,7 @@ impl Node {
             header: header_cells,
             rows: body_rows,
             alignments,
+            properties: TableProperties::default(),
         }
     }
 
@@ -454,6 +663,59 @@ impl Node {
             header: header_cells,
             rows: body_rows,
             alignments,
+            properties: TableProperties::default(),
+        }
+    }
+
+    /// Creates a table with properties
+    pub fn table_with_properties(
+        headers: Vec<impl Into<String>>,
+        rows: Vec<Vec<impl Into<String>>>,
+        properties: TableProperties,
+    ) -> Self {
+        let header_cells: Vec<TableCell> = headers
+            .into_iter()
+            .map(|text| TableCell::header(text))
+            .collect();
+
+        let body_rows = rows
+            .into_iter()
+            .map(|row| row.into_iter().map(|cell| TableCell::text(cell)).collect())
+            .collect();
+
+        // Default alignments for all columns
+        let alignments = vec![TableAlignment::default(); header_cells.len()];
+
+        Self::Table {
+            header: header_cells,
+            rows: body_rows,
+            alignments,
+            properties,
+        }
+    }
+
+    /// Creates a full-featured table with alignments and properties
+    pub fn create_enhanced_table(
+        headers: Vec<impl Into<String>>,
+        rows: Vec<Vec<impl Into<String>>>,
+        alignments: Vec<TableAlignment>,
+        properties: TableProperties,
+    ) -> Self {
+        let header_cells = headers
+            .into_iter()
+            .map(|text| TableCell::header(text))
+            .collect();
+
+        let body_rows = rows
+            .into_iter()
+            .map(|row| row.into_iter().map(|text| TableCell::text(text)).collect())
+            .collect();
+
+        Self::Table {
+            header: header_cells,
+            rows: body_rows,
+            alignments,
+            properties,
         }
     }
 
@@ -544,11 +806,12 @@ impl Node {
     /// Returns this node as a table if it is one
     pub fn as_table(&self) -> Option<TableComponents> {
         match self {
-            Self::Table {
+            Node::Table {
                 header,
                 rows,
                 alignments,
-            } => Some((header, rows, alignments)),
+                properties,
+            } => Some((header, rows, alignments, properties)),
             _ => None,
         }
     }

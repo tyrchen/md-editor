@@ -1,6 +1,6 @@
 use crate::{
     Document, FootnoteDefinition, InlineNode, ListItem, ListType, Node, ParseError, TableAlignment,
-    TableCell, TextFormatting, TextNode,
+    TableCell, TableProperties, TextFormatting, TextNode,
 };
 use pulldown_cmark::{
     Alignment, CodeBlockKind, Event, HeadingLevel, /* LinkType, */ Options, Parser, Tag,
@@ -489,6 +489,7 @@ pub(crate) fn parse_markdown(markdown: &str) -> Result<Document, ParseError> {
                                     header: table_state.header,
                                     rows: table_state.rows,
                                     alignments: table_state.alignments,
+                                    properties: TableProperties::default(),
                                 };
                                 stack.current_nodes().push(table_node);
                             } else {

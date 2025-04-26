@@ -34,7 +34,7 @@ mod tests {
     use super::*;
     use crate::{
         Document, FootnoteDefinition, InlineNode, ListItem, ListType, Node, TableAlignment,
-        TableCell, TextFormatting, TextNode,
+        TableCell, TableProperties, TextFormatting, TextNode,
     };
 
     // Helper function to create a test document
@@ -132,6 +132,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         });
 
         // Add nested lists

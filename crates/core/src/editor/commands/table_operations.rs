@@ -1,5 +1,5 @@
 use crate::editor::command::Command;
-use crate::{Document, EditError, Node, TableAlignment, TableCell};
+use crate::{Document, EditError, Node, TableAlignment, TableCell, TableProperties};
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -26,6 +26,30 @@ pub enum TableOperation {
         column: usize,
         alignment: TableAlignment,
     },
+    /// Set cell background color
+    SetCellBackground {
+        row: usize,
+        column: usize,
+        color: String,
+        is_header: bool,
+    },
+    /// Set cell style
+    SetCellStyle {
+        row: usize,
+        column: usize,
+        style: String,
+        is_header: bool,
+    },
+    /// Set cell span
+    SetCellSpan {
+        row: usize,
+        column: usize,
+        colspan: u32,
+        rowspan: u32,
+        is_header: bool,
+    },
+    /// Set table properties
+    SetTableProperties(TableProperties),
 }
 
 /// Command to perform operations on an existing table
@@ -78,6 +102,7 @@ impl Command for TableOperationsCommand {
                 header,
                 rows,
                 alignments,
+                properties,
             } => {
                 match &self.operation {
                     TableOperation::AddRow(index) => {
@@ -174,6 +199,78 @@ impl Command for TableOperationsCommand {
                             return Err(EditError::IndexOutOfBounds);
                         }
                     }
+                    TableOperation::SetCellBackground {
+                        row,
+                        column,
+                        color,
+                        is_header,
+                    } => {
+                        if *is_header {
+                            // Modify header cell
+                            if !header.is_empty() && *column < header.len() {
+                                header[*column].background_color = Some(color.clone());
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        } else {
+                            // Modify body cell
+                            if *row < rows.len() && *column < rows[*row].len() {
+                                rows[*row][*column].background_color = Some(color.clone());
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        }
+                    }
+                    TableOperation::SetCellStyle {
+                        row,
+                        column,
+                        style,
+                        is_header,
+                    } => {
+                        if *is_header {
+                            // Modify header cell
+                            if !header.is_empty() && *column < header.len() {
+                                header[*column].style = Some(style.clone());
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        } else {
+                            // Modify body cell
+                            if *row < rows.len() && *column < rows[*row].len() {
+                                rows[*row][*column].style = Some(style.clone());
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        }
+                    }
+                    TableOperation::SetCellSpan {
+                        row,
+                        column,
+                        colspan,
+                        rowspan,
+                        is_header,
+                    } => {
+                        if *is_header {
+                            // Modify header cell
+                            if !header.is_empty() && *column < header.len() {
+                                header[*column].colspan = *colspan;
+                                header[*column].rowspan = *rowspan;
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        } else {
+                            // Modify body cell
+                            if *row < rows.len() && *column < rows[*row].len() {
+                                rows[*row][*column].colspan = *colspan;
+                                rows[*row][*column].rowspan = *rowspan;
+                            } else {
+                                return Err(EditError::IndexOutOfBounds);
+                            }
+                        }
+                    }
+                    TableOperation::SetTableProperties(new_properties) => {
+                        *properties = new_properties.clone();
+                    }
                 }
             }
             _ => unreachable!(), // We already checked this is a table
@@ -218,6 +315,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         };
 
         doc.nodes.push(table_node);
@@ -239,6 +337,7 @@ mod tests {
                 header: _,
                 rows,
                 alignments: _,
+                properties: _,
             } => {
                 assert_eq!(rows.len(), 2);
                 assert_eq!(rows[1].len(), 2);
@@ -258,6 +357,7 @@ mod tests {
                 header: _,
                 rows,
                 alignments: _,
+                properties: _,
             } => {
                 assert_eq!(rows.len(), 1);
             }
@@ -278,6 +378,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         };
 
         doc.nodes.push(table_node);
@@ -299,6 +400,7 @@ mod tests {
                 header,
                 rows,
                 alignments,
+                properties: _,
             } => {
                 assert_eq!(header.len(), 3);
                 assert_eq!(rows[0].len(), 3);
@@ -322,6 +424,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         };
 
         doc.nodes.push(table_node);
@@ -351,6 +454,7 @@ mod tests {
                 header: _,
                 rows,
                 alignments: _,
+                properties: _,
             } => {
                 assert_eq!(rows[0][1].content[0].as_text().unwrap(), "Updated");
             }
@@ -371,6 +475,7 @@ mod tests {
             header,
             rows,
             alignments,
+            properties: TableProperties::default(),
         };
 
         doc.nodes.push(table_node);
@@ -398,6 +503,7 @@ mod tests {
                 header: _,
                 rows: _,
                 alignments,
+                properties: _,
             } => {
                 assert_eq!(alignments[1], TableAlignment::Center);
             }

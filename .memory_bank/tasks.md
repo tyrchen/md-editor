@@ -19,8 +19,6 @@
 - [x] Implement `SelectionFormatCommand`
 - [x] Implement `SelectionIndentCommand`
 
-## Upcoming Tasks
-
 ### Phase 3: Advanced Document Structure
 - [x] Design table data structure
 - [x] Implement `TableOperationsCommand`
@@ -28,7 +26,24 @@
 - [x] Implement `GroupNodesCommand`
 - [x] Implement `CreateTOCCommand`
 
-### Phase 4: Collaboration Features
+### Phase 4: Enhanced Markdown Support
+- [x] Plan GitHub Flavored Markdown (GFM) implementation
+- [x] Implement enhanced table functionality
+- [ ] Implement autolinks
+- [ ] Improve task list interactivity
+- [ ] Enhance code blocks with language-specific features
+
+## In Progress Tasks
+
+### Phase 5: Advanced GFM Features
+- [ ] Implement autolinks
+- [ ] Improve task list interactivity
+- [ ] Enhance code blocks with language-specific features
+- [ ] Implement GFM-compliant Markdown serialization
+
+## Upcoming Tasks
+
+### Phase 6: Collaboration Features
 - [ ] Design comment/annotation data structure
 - [ ] Implement `AddCommentCommand`
 - [ ] Implement `ResolveCommentCommand`
@@ -36,7 +51,15 @@
 - [ ] Implement `TrackChangesCommand`
 - [ ] Implement `AcceptRejectChangesCommand`
 
+### Phase 7: Extended Markdown Features
+- [ ] Implement footnotes
+- [ ] Implement definition lists
+- [ ] Add emoji support
+- [ ] Add mentions and references
+- [ ] Add mathematical notation support
+
 ## Notes
 - All commands should follow the Command pattern
 - All commands should be properly tested for both execute and undo operations
 - Document all commands in the memory bank
+- Use existing Rust libraries where appropriate (pulldown-cmark, html5ever)

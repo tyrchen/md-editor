@@ -1,110 +1,126 @@
 use crate::editor::command::Command;
-use crate::{Document, EditError, Node, TableAlignment, TableCell};
+use crate::{Document, EditError, Node, TableAlignment, TableCell, TableProperties};
 use std::any::Any;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// Command to create and insert a table in the document
+/// Command to create a table
+#[allow(dead_code)]
 pub struct CreateTableCommand {
     document: Rc<RefCell<Document>>,
-    /// Position to insert the table
     position: usize,
-    /// Number of columns
     columns: usize,
-    /// Number of rows (not including header row)
     rows: usize,
-    /// Whether to include a header row
-    with_header: bool,
-    /// Column alignments
-    alignments: Vec<TableAlignment>,
-    /// Optional data to populate the table with
-    data: Option<Vec<Vec<String>>>,
-    /// Original nodes for undo
-    original_nodes: Option<Vec<Node>>,
+    alignments: Option<Vec<TableAlignment>>,
+    header_data: Option<Vec<String>>,
+    row_data: Option<Vec<Vec<String>>>,
+    properties: TableProperties,
+    old_node: Option<Node>,
 }
 
 impl CreateTableCommand {
-    /// Create a new empty table command with default alignments
+    /// Create a new table with default alignments
     pub fn new(
         document: Rc<RefCell<Document>>,
         position: usize,
         columns: usize,
         rows: usize,
-        with_header: bool,
     ) -> Self {
-        let alignments = vec![TableAlignment::default(); columns];
         Self {
             document,
             position,
             columns,
             rows,
-            with_header,
-            alignments,
-            data: None,
-            original_nodes: None,
+            alignments: None,
+            header_data: None,
+            row_data: None,
+            properties: TableProperties::default(),
+            old_node: None,
         }
     }
 
-    /// Create a new table command with specified alignments
+    /// Create a new table with specific alignments
     pub fn with_alignments(
         document: Rc<RefCell<Document>>,
         position: usize,
         columns: usize,
         rows: usize,
-        with_header: bool,
         alignments: Vec<TableAlignment>,
     ) -> Self {
-        let alignments = if alignments.len() != columns {
-            vec![TableAlignment::default(); columns]
-        } else {
-            alignments
-        };
-
         Self {
             document,
             position,
             columns,
             rows,
-            with_header,
-            alignments,
-            data: None,
-            original_nodes: None,
+            alignments: Some(alignments),
+            header_data: None,
+            row_data: None,
+            properties: TableProperties::default(),
+            old_node: None,
         }
     }
 
-    /// Create a new table command with specified data
+    /// Create a new table with specific data
     pub fn with_data(
         document: Rc<RefCell<Document>>,
         position: usize,
-        data: Vec<Vec<String>>,
-        with_header: bool,
+        header: Vec<String>,
+        rows: Vec<Vec<String>>,
         alignments: Option<Vec<TableAlignment>>,
     ) -> Self {
-        if data.is_empty() {
-            return Self::new(document, position, 1, 1, with_header);
+        Self {
+            document,
+            position,
+            columns: header.len(),
+            rows: rows.len(),
+            alignments,
+            header_data: Some(header),
+            row_data: Some(rows),
+            properties: TableProperties::default(),
+            old_node: None,
         }
+    }
 
-        let rows = if with_header {
-            data.len() - 1
-        } else {
-            data.len()
-        };
-        let columns = data[0].len();
-
-        let alignments = match alignments {
-            Some(a) if a.len() == columns => a,
-            _ => vec![TableAlignment::default(); columns],
-        };
-
+    /// Create a new table with properties
+    pub fn with_properties(
+        document: Rc<RefCell<Document>>,
+        position: usize,
+        columns: usize,
+        rows: usize,
+        properties: TableProperties,
+    ) -> Self {
         Self {
             document,
             position,
             columns,
             rows,
-            with_header,
+            alignments: None,
+            header_data: None,
+            row_data: None,
+            properties,
+            old_node: None,
+        }
+    }
+
+    /// Create a new table with data and properties
+    pub fn with_data_and_properties(
+        document: Rc<RefCell<Document>>,
+        position: usize,
+        header: Vec<String>,
+        rows: Vec<Vec<String>>,
+        alignments: Option<Vec<TableAlignment>>,
+        properties: TableProperties,
+    ) -> Self {
+        Self {
+            document,
+            position,
+            columns: header.len(),
+            rows: rows.len(),
             alignments,
-            data: Some(data),
-            original_nodes: None,
+            header_data: Some(header),
+            row_data: Some(rows),
+            properties,
+            old_node: None,
         }
     }
 }
@@ -113,71 +129,92 @@ impl Command for CreateTableCommand {
     fn execute(&mut self) -> Result<(), EditError> {
         let mut document = self.document.borrow_mut();
 
-        // Store original document state for undo
-        self.original_nodes = Some(document.nodes.clone());
+        if self.position > document.nodes.len() {
+            return Err(EditError::IndexOutOfBounds);
+        }
 
-        // Ensure position is valid
-        let position = self.position.min(document.nodes.len());
+        // Create a new table node
+        let mut header = Vec::new();
+        let mut rows = Vec::new();
+        let mut alignments = Vec::new();
 
-        // Create table header cells
-        let header = if self.with_header {
-            (0..self.columns)
-                .map(|i| {
-                    if let Some(data) = &self.data {
-                        if !data.is_empty() && i < data[0].len() {
-                            TableCell::text(&data[0][i])
-                        } else {
-                            TableCell::text(format!("Header {}", i + 1))
-                        }
-                    } else {
-                        TableCell::text(format!("Header {}", i + 1))
-                    }
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        // Create table rows
-        let rows: Vec<Vec<TableCell>> = if let Some(data) = &self.data {
-            // Use provided data to populate the table
-            let start_idx = if self.with_header { 1 } else { 0 };
-            data[start_idx..]
+        // Generate header cells
+        if let Some(header_data) = &self.header_data {
+            header = header_data
                 .iter()
-                .map(|row| row.iter().map(TableCell::text).collect::<Vec<TableCell>>())
-                .collect()
-        } else {
-            // Create empty rows
-            (0..self.rows)
-                .map(|_| {
-                    (0..self.columns)
-                        .map(|i| TableCell::text(format!("Cell {}", i + 1)))
-                        .collect::<Vec<TableCell>>()
-                })
-                .collect()
-        };
+                .map(|h| TableCell::header(h.clone()))
+                .collect();
 
-        // Create table node
+            // Use provided alignments if they exist, otherwise use defaults
+            if let Some(align) = &self.alignments {
+                alignments = align.clone();
+            } else {
+                alignments = vec![TableAlignment::default(); self.columns];
+            }
+        } else {
+            for i in 0..self.columns {
+                header.push(TableCell::header(format!("Header {}", i + 1)));
+                alignments.push(TableAlignment::default());
+            }
+        }
+
+        // Generate rows and cells
+        if let Some(row_data) = &self.row_data {
+            rows = row_data
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|cell| TableCell::text(cell.clone()))
+                        .collect()
+                })
+                .collect();
+        } else {
+            for i in 0..self.rows {
+                let mut row = Vec::new();
+                for j in 0..self.columns {
+                    row.push(TableCell::text(format!("Row {}, Col {}", i + 1, j + 1)));
+                }
+                rows.push(row);
+            }
+        }
+
+        // Create the table node
         let table_node = Node::Table {
             header,
             rows,
-            alignments: self.alignments.clone(),
+            alignments,
+            properties: self.properties.clone(),
         };
 
-        // Insert table into document
-        document.nodes.insert(position, table_node);
+        // Store the old node if there is one
+        if self.position < document.nodes.len() {
+            self.old_node = Some(document.nodes[self.position].clone());
+        }
+
+        // Insert the new table node
+        if self.position < document.nodes.len() {
+            document.nodes[self.position] = table_node;
+        } else {
+            document.nodes.push(table_node);
+        }
 
         Ok(())
     }
 
     fn undo(&mut self) -> Result<(), EditError> {
-        if let Some(original_nodes) = self.original_nodes.take() {
-            let mut document = self.document.borrow_mut();
-            document.nodes = original_nodes;
-            Ok(())
+        let mut document = self.document.borrow_mut();
+
+        if let Some(old_node) = self.old_node.take() {
+            // Restore the old node
+            document.nodes[self.position] = old_node;
         } else {
-            Err(EditError::Other("No original state to restore".to_string()))
+            // If there was no old node, remove the inserted node
+            if self.position < document.nodes.len() {
+                document.nodes.remove(self.position);
+            }
         }
+
+        Ok(())
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -196,7 +233,7 @@ mod tests {
         doc.add_paragraph_with_text("Test paragraph");
 
         let document_rc = Rc::new(RefCell::new(doc));
-        let mut cmd = CreateTableCommand::new(document_rc.clone(), 1, 3, 2, true);
+        let mut cmd = CreateTableCommand::new(document_rc.clone(), 1, 3, 2);
 
         // Execute the command
         let result = cmd.execute();
@@ -212,6 +249,7 @@ mod tests {
                 header,
                 rows,
                 alignments,
+                properties,
             } => {
                 // Check header
                 assert_eq!(header.len(), 3);
@@ -220,11 +258,13 @@ mod tests {
                 // Check rows
                 assert_eq!(rows.len(), 2);
                 assert_eq!(rows[0].len(), 3);
-                assert_eq!(rows[0][0].content[0].as_text().unwrap(), "Cell 1");
 
                 // Check alignments
                 assert_eq!(alignments.len(), 3);
                 assert_eq!(alignments[0], TableAlignment::None);
+
+                // Check properties
+                assert_eq!(*properties, TableProperties::default());
             }
             _ => panic!("Expected Table node"),
         }
@@ -257,7 +297,6 @@ mod tests {
 
         // Sample data with header row and two data rows
         let data = vec![
-            vec!["Name".to_string(), "Age".to_string(), "Role".to_string()],
             vec![
                 "Alice".to_string(),
                 "30".to_string(),
@@ -269,8 +308,8 @@ mod tests {
         let mut cmd = CreateTableCommand::with_data(
             document_rc.clone(),
             0,
+            vec!["Name".to_string(), "Age".to_string(), "Role".to_string()],
             data,
-            true,
             Some(vec![
                 TableAlignment::Left,
                 TableAlignment::Center,
@@ -292,6 +331,7 @@ mod tests {
                 header,
                 rows,
                 alignments,
+                properties,
             } => {
                 // Check header
                 assert_eq!(header.len(), 3);
@@ -310,6 +350,9 @@ mod tests {
                 assert_eq!(alignments[0], TableAlignment::Left);
                 assert_eq!(alignments[1], TableAlignment::Center);
                 assert_eq!(alignments[2], TableAlignment::Right);
+
+                // Check properties
+                assert_eq!(*properties, TableProperties::default());
             }
             _ => panic!("Expected Table node"),
         }

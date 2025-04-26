@@ -11,7 +11,7 @@ pub use formatting::TextFormatting;
 pub use inline::{InlineNode, TextNode};
 pub use node::{
     DefinitionItem, FootnoteDefinition, FootnoteReference, ListItem, ListType, Node,
-    TableAlignment, TableCell,
+    TableAlignment, TableCell, TableProperties,
 };
 pub use selection::{Position, Selection};
 

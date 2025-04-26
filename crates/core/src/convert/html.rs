@@ -25,23 +25,24 @@ fn to_html(document: &Document) -> String {
     let mut html = String::new();
 
     for node in &document.nodes {
-        html.push_str(&node_to_html(node));
+        match node_to_html(node, 0) {
+            Ok(node_html) => html.push_str(&node_html),
+            Err(err) => eprintln!("Error converting node to HTML: {}", err),
+        }
     }
 
     html
 }
 
 /// Convert a node to HTML
-fn node_to_html(node: &Node) -> String {
+fn node_to_html(node: &Node, _indent: usize) -> Result<String, ParseError> {
     match node {
         Node::Heading { level, children } => {
             let tag = format!("h{}", level);
-            format!("<{}>{}</{}>", tag, inlines_to_html(children), tag)
+            Ok(format!("<{}>{}</{}>", tag, inlines_to_html(children), tag))
         }
 
-        Node::Paragraph { children } => {
-            format!("<p>{}</p>", inlines_to_html(children))
-        }
+        Node::Paragraph { children } => Ok(format!("<p>{}</p>", inlines_to_html(children))),
 
         Node::List { list_type, items } => {
             let tag = match list_type {
@@ -74,13 +75,13 @@ fn node_to_html(node: &Node) -> String {
 
                         // Add the rest of the children normally
                         for child in &item.children[1..] {
-                            item_html.push_str(&node_to_html(child));
+                            item_html.push_str(&node_to_html(child, 0)?);
                         }
                     } else {
                         // If the first child is not a paragraph, add checkbox first (if task list) then content
                         item_html.push_str(&checkbox);
                         for child in &item.children {
-                            item_html.push_str(&node_to_html(child));
+                            item_html.push_str(&node_to_html(child, 0)?);
                         }
                     }
                 } else {
@@ -92,7 +93,7 @@ fn node_to_html(node: &Node) -> String {
             }
 
             html.push_str(&format!("</{}>", tag.split(' ').next().unwrap_or(tag))); // Close using base tag (e.g., ul, ol)
-            html
+            Ok(html)
         }
 
         Node::CodeBlock { language, code } => {
@@ -102,114 +103,223 @@ fn node_to_html(node: &Node) -> String {
                 String::new()
             };
 
-            format!("<pre><code{}>{}</code></pre>", lang_attr, html_escape(code))
+            Ok(format!(
+                "<pre><code{}>{}</code></pre>",
+                lang_attr,
+                html_escape(code)
+            ))
         }
 
         Node::BlockQuote { children } => {
             let mut html = String::from("<blockquote>");
             for child in children {
-                html.push_str(&node_to_html(child));
+                html.push_str(&node_to_html(child, 0)?);
             }
             html.push_str("</blockquote>");
-            html
+            Ok(html)
         }
 
-        Node::ThematicBreak => String::from("<hr>"),
+        Node::ThematicBreak => Ok(String::from("<hr>")),
 
         Node::Group { name, children } => {
             let mut html = format!("<div class=\"group\" data-name=\"{}\">", html_escape(name));
             for child in children {
-                html.push_str(&node_to_html(child));
+                html.push_str(&node_to_html(child, 0)?);
             }
             html.push_str("</div>");
-            html
+            Ok(html)
         }
 
         Node::Table {
             header,
             rows,
             alignments,
+            properties,
         } => {
-            let mut html = String::from("<table>\n<thead>\n<tr>");
+            let mut html = String::new();
 
-            // Table header
-            for (i, cell) in header.iter().enumerate() {
-                let align_class = if i < alignments.len() {
-                    match &alignments[i] {
-                        TableAlignment::Left => " class=\"align-left\"",
-                        TableAlignment::Center => " class=\"align-center\"",
-                        TableAlignment::Right => " class=\"align-right\"",
-                        TableAlignment::None => "",
-                    }
-                } else {
-                    ""
-                };
-
-                let colspan_attr = if cell.colspan > 1 {
-                    format!(" colspan=\"{}\"", cell.colspan)
-                } else {
-                    String::new()
-                };
-
-                let rowspan_attr = if cell.rowspan > 1 {
-                    format!(" rowspan=\"{}\"", cell.rowspan)
-                } else {
-                    String::new()
-                };
-
-                html.push_str(&format!(
-                    "<th{}{}{}>{}</th>",
-                    align_class,
-                    colspan_attr,
-                    rowspan_attr,
-                    inlines_to_html(&cell.content)
-                ));
+            // Apply table classes based on properties
+            let mut table_classes = Vec::new();
+            if properties.has_borders {
+                table_classes.push("bordered");
+            }
+            if properties.striped_rows {
+                table_classes.push("striped");
+            }
+            if properties.hoverable {
+                table_classes.push("hoverable");
+            }
+            if let Some(css_class) = &properties.css_class {
+                table_classes.push(css_class);
             }
 
-            html.push_str("</tr>\n</thead>\n<tbody>\n");
+            // Start table tag with classes and style
+            html.push_str("<table");
+            if !table_classes.is_empty() {
+                html.push_str(" class=\"");
+                html.push_str(&table_classes.join(" "));
+                html.push('"');
+            }
+            if let Some(style) = &properties.style {
+                html.push_str(" style=\"");
+                html.push_str(style);
+                html.push('"');
+            }
+            html.push_str(">\n");
 
-            // Table rows
-            for row in rows {
-                html.push_str("<tr>");
+            // Add caption if present
+            if let Some(caption) = &properties.caption {
+                if !properties.caption_at_bottom {
+                    html.push_str(&format!("<caption>{}</caption>\n", html_escape(caption)));
+                }
+            }
 
-                for (i, cell) in row.iter().enumerate() {
-                    let align_class = if i < alignments.len() {
+            // Table header
+            if !header.is_empty() && properties.has_header {
+                html.push_str("<thead>\n<tr>");
+
+                for (i, cell) in header.iter().enumerate() {
+                    let alignment = if i < alignments.len() {
                         match &alignments[i] {
                             TableAlignment::Left => " class=\"align-left\"",
                             TableAlignment::Center => " class=\"align-center\"",
                             TableAlignment::Right => " class=\"align-right\"",
+                            TableAlignment::Justify => " class=\"align-justify\"",
                             TableAlignment::None => "",
+                            _ => "", // Vertical alignments don't apply to horizontal text alignment
                         }
                     } else {
                         ""
                     };
 
-                    let colspan_attr = if cell.colspan > 1 {
-                        format!(" colspan=\"{}\"", cell.colspan)
-                    } else {
-                        String::new()
-                    };
+                    // Cell opening tag with attributes
+                    html.push_str("<th");
+                    html.push_str(alignment);
 
-                    let rowspan_attr = if cell.rowspan > 1 {
-                        format!(" rowspan=\"{}\"", cell.rowspan)
-                    } else {
-                        String::new()
-                    };
+                    // Add colspan if greater than 1
+                    if cell.colspan > 1 {
+                        html.push_str(&format!(" colspan=\"{}\"", cell.colspan));
+                    }
 
-                    html.push_str(&format!(
-                        "<td{}{}{}>{}</td>",
-                        align_class,
-                        colspan_attr,
-                        rowspan_attr,
-                        inlines_to_html(&cell.content)
-                    ));
+                    // Add rowspan if greater than 1
+                    if cell.rowspan > 1 {
+                        html.push_str(&format!(" rowspan=\"{}\"", cell.rowspan));
+                    }
+
+                    // Add background color if present
+                    if let Some(bg_color) = &cell.background_color {
+                        html.push_str(&format!(" style=\"background-color: {}\"", bg_color));
+                    }
+
+                    // Add CSS class if present
+                    if let Some(css_class) = &cell.css_class {
+                        html.push_str(&format!(" class=\"{}\"", css_class));
+                    }
+
+                    // Add custom style if present
+                    if let Some(style) = &cell.style {
+                        if cell.background_color.is_some() {
+                            html.push_str(&format!("; {}", style));
+                        } else {
+                            html.push_str(&format!(" style=\"{}\"", style));
+                        }
+                    }
+
+                    html.push('>');
+
+                    // Cell content
+                    for inline in &cell.content {
+                        html.push_str(&inline_node_to_html(inline)?);
+                    }
+
+                    html.push_str("</th>");
                 }
 
-                html.push_str("</tr>\n");
+                html.push_str("</tr>\n</thead>\n");
             }
 
-            html.push_str("</tbody>\n</table>");
-            html
+            // Table rows
+            if !rows.is_empty() {
+                html.push_str("<tbody>\n");
+
+                for row in rows {
+                    html.push_str("<tr>");
+
+                    for (i, cell) in row.iter().enumerate() {
+                        let alignment = if i < alignments.len() {
+                            match &alignments[i] {
+                                TableAlignment::Left => " class=\"align-left\"",
+                                TableAlignment::Center => " class=\"align-center\"",
+                                TableAlignment::Right => " class=\"align-right\"",
+                                TableAlignment::Justify => " class=\"align-justify\"",
+                                TableAlignment::None => "",
+                                _ => "", // Vertical alignments don't apply to horizontal text alignment
+                            }
+                        } else {
+                            ""
+                        };
+
+                        // Determine if this is a header or data cell
+                        let tag = if cell.is_header { "th" } else { "td" };
+
+                        // Cell opening tag with attributes
+                        html.push_str(&format!("<{}", tag));
+                        html.push_str(alignment);
+
+                        // Add colspan if greater than 1
+                        if cell.colspan > 1 {
+                            html.push_str(&format!(" colspan=\"{}\"", cell.colspan));
+                        }
+
+                        // Add rowspan if greater than 1
+                        if cell.rowspan > 1 {
+                            html.push_str(&format!(" rowspan=\"{}\"", cell.rowspan));
+                        }
+
+                        // Add background color if present
+                        if let Some(bg_color) = &cell.background_color {
+                            html.push_str(&format!(" style=\"background-color: {}\"", bg_color));
+                        }
+
+                        // Add CSS class if present
+                        if let Some(css_class) = &cell.css_class {
+                            html.push_str(&format!(" class=\"{}\"", css_class));
+                        }
+
+                        // Add custom style if present
+                        if let Some(style) = &cell.style {
+                            if cell.background_color.is_some() {
+                                html.push_str(&format!("; {}", style));
+                            } else {
+                                html.push_str(&format!(" style=\"{}\"", style));
+                            }
+                        }
+
+                        html.push('>');
+
+                        // Cell content
+                        for inline in &cell.content {
+                            html.push_str(&inline_node_to_html(inline)?);
+                        }
+
+                        html.push_str(&format!("</{}>", tag));
+                    }
+
+                    html.push_str("</tr>\n");
+                }
+
+                html.push_str("</tbody>\n");
+            }
+
+            // Add caption at bottom if specified
+            if let Some(caption) = &properties.caption {
+                if properties.caption_at_bottom {
+                    html.push_str(&format!("<caption>{}</caption>\n", html_escape(caption)));
+                }
+            }
+
+            html.push_str("</table>");
+            Ok(html)
         }
 
         Node::FootnoteReference(footnote_ref) => {
@@ -217,12 +327,12 @@ fn node_to_html(node: &Node) -> String {
                 .identifier
                 .as_ref()
                 .unwrap_or(&footnote_ref.label);
-            format!(
+            Ok(format!(
                 "<sup class=\"footnote-ref\"><a href=\"#fn-{}\" id=\"fnref-{}\">{}</a></sup>",
                 html_escape(id),
                 html_escape(id),
                 html_escape(&footnote_ref.label)
-            )
+            ))
         }
 
         Node::FootnoteDefinition(footnote_def) => {
@@ -233,14 +343,14 @@ fn node_to_html(node: &Node) -> String {
             );
 
             for child in &footnote_def.content {
-                html.push_str(&node_to_html(child));
+                html.push_str(&node_to_html(child, 0)?);
             }
 
             // Add backlink if needed, depends on specific requirements
             // html.push_str(&format!(" <a href="#fnref-{}" class="footnote-backref">↩</a>", html_escape(&footnote_def.label)));
 
             html.push_str("</p>\n</div>");
-            html
+            Ok(html)
         }
 
         Node::DefinitionList { items } => {
@@ -252,27 +362,28 @@ fn node_to_html(node: &Node) -> String {
                 for desc in &item.descriptions {
                     html.push_str("<dd>");
                     for node in desc {
-                        html.push_str(&node_to_html(node));
+                        html.push_str(&node_to_html(node, 0)?);
                     }
                     html.push_str("</dd>");
                 }
             }
 
             html.push_str("</dl>");
-            html
+            Ok(html)
         }
 
-        Node::MathBlock { math } => {
-            format!("<div class=\"math-block\">${}$</div>", html_escape(math))
-        }
+        Node::MathBlock { math } => Ok(format!(
+            "<div class=\"math-block\">${}$</div>",
+            html_escape(math)
+        )),
         // Handle temporary nodes (should ideally not be serialized)
         Node::TempListItem(_) => {
             eprintln!("Warning: Attempting to serialize TempListItem");
-            String::new()
+            Ok(String::new())
         }
         Node::TempTableCell(_) => {
             eprintln!("Warning: Attempting to serialize TempTableCell");
-            String::new()
+            Ok(String::new())
         }
     }
 }
@@ -282,14 +393,17 @@ fn inlines_to_html(inlines: &[InlineNode]) -> String {
     let mut html = String::new();
 
     for inline in inlines {
-        html.push_str(&inline_to_html(inline));
+        match inline_node_to_html(inline) {
+            Ok(inline_html) => html.push_str(&inline_html),
+            Err(err) => eprintln!("Error converting inline node to HTML: {}", err),
+        }
     }
 
     html
 }
 
 /// Convert an inline node to HTML
-fn inline_to_html(inline: &InlineNode) -> String {
+fn inline_node_to_html(inline: &InlineNode) -> Result<String, ParseError> {
     match inline {
         InlineNode::Text(text_node) => {
             let mut result = html_escape(&text_node.text);
@@ -310,7 +424,7 @@ fn inline_to_html(inline: &InlineNode) -> String {
                 result = format!("<code>{}</code>", result);
             }
 
-            result
+            Ok(result)
         }
 
         InlineNode::Link {
@@ -324,12 +438,12 @@ fn inline_to_html(inline: &InlineNode) -> String {
                 String::new()
             };
 
-            format!(
+            Ok(format!(
                 "<a href=\"{}\"{}>{}",
                 html_escape(url),
                 title_attr,
                 inlines_to_html(children)
-            )
+            ))
         }
 
         InlineNode::Image { url, alt, title } => {
@@ -339,17 +453,15 @@ fn inline_to_html(inline: &InlineNode) -> String {
                 String::new()
             };
 
-            format!(
+            Ok(format!(
                 "<img src=\"{}\" alt=\"{}\"{}>",
                 html_escape(url),
                 html_escape(alt),
                 title_attr
-            )
+            ))
         }
 
-        InlineNode::CodeSpan { code } => {
-            format!("<code>{}</code>", html_escape(code))
-        }
+        InlineNode::CodeSpan { code } => Ok(format!("<code>{}</code>", html_escape(code))),
 
         InlineNode::AutoLink { url, is_email } => {
             let display = url.clone(); // Display the URL as is
@@ -360,61 +472,58 @@ fn inline_to_html(inline: &InlineNode) -> String {
                 url.clone()
             };
 
-            format!(
+            Ok(format!(
                 "<a href=\"{}\">{}</a>",
                 html_escape(&href),
                 html_escape(&display)
-            )
+            ))
         }
 
-        InlineNode::FootnoteRef { label } => {
-            format!(
-                "<sup class=\"footnote-ref\"><a href=\"#fn-{}\" id=\"fnref-{}\">{}</a></sup>",
-                html_escape(label),
-                html_escape(label),
-                html_escape(label)
-            )
-        }
+        InlineNode::FootnoteRef { label } => Ok(format!(
+            "<sup class=\"footnote-ref\"><a href=\"#fn-{}\" id=\"fnref-{}\">{}</a></sup>",
+            html_escape(label),
+            html_escape(label),
+            html_escape(label)
+        )),
 
-        InlineNode::InlineFootnote { children } => {
-            format!(
-                "<sup class=\"footnote-inline\">{}</sup>",
-                inlines_to_html(children)
-            )
-        }
+        InlineNode::InlineFootnote { children } => Ok(format!(
+            "<sup class=\"footnote-inline\">{}</sup>",
+            inlines_to_html(children)
+        )),
 
         InlineNode::Mention { name, mention_type } => match mention_type.as_str() {
-            "user" => format!(
+            "user" => Ok(format!(
                 "<span class=\"mention mention-user\">@{}</span>",
                 html_escape(name)
-            ),
-            "issue" => format!(
+            )),
+            "issue" => Ok(format!(
                 "<span class=\"mention mention-issue\">#{}</span>",
                 html_escape(name)
-            ),
-            _ => format!(
+            )),
+            _ => Ok(format!(
                 "<span class=\"mention mention-{}\">{}</span>",
                 html_escape(mention_type),
                 html_escape(name)
-            ),
+            )),
         },
 
-        InlineNode::Math { math } => {
-            format!("<span class=\"math-inline\">${}$</span>", html_escape(math))
-        }
+        InlineNode::Math { math } => Ok(format!(
+            "<span class=\"math-inline\">${}$</span>",
+            html_escape(math)
+        )),
 
         InlineNode::Emoji { shortcode } => {
             // Basic emoji rendering, replace with actual emoji character if possible
             // using a library like `emojis` crate in the future.
-            format!(
+            Ok(format!(
                 "<span class=\"emoji emoji-{}\">{}</span>",
                 html_escape(shortcode),
                 html_escape(shortcode) // Display shortcode for now
-            )
+            ))
         }
 
-        InlineNode::HardBreak => "<br/>\n".to_string(),
-        InlineNode::SoftBreak => "<br/>\n".to_string(),
+        InlineNode::HardBreak => Ok("<br/>\n".to_string()),
+        InlineNode::SoftBreak => Ok("<br/>\n".to_string()),
     }
 }
 
@@ -435,7 +544,8 @@ fn from_html(html: &str) -> Result<Document, ParseError> {
 mod tests {
     use super::*;
     use crate::{
-        Document, InlineNode, ListType, Node, TableAlignment, TableCell, TextFormatting, TextNode,
+        Document, InlineNode, ListType, Node, TableAlignment, TableCell, TableProperties,
+        TextFormatting, TextNode,
     };
 
     // Helper function to create a test document (can be adapted from serialization.rs)
@@ -655,18 +765,21 @@ mod tests {
             TableAlignment::Right,
         ];
 
-        doc.nodes.push(Node::Table {
+        let table_node = Node::Table {
             header,
             rows,
             alignments,
-        });
+            properties: TableProperties::default(),
+        };
+
+        doc.nodes.push(table_node);
 
         let html = to_html(&doc);
 
         println!("Table HTML: {}", html);
 
         // Test table structure
-        assert!(html.contains("<table>"));
+        assert!(html.contains("<table class=\"bordered\">"));
         assert!(html.contains("<thead>"));
         assert!(html.contains("<tbody>"));
 

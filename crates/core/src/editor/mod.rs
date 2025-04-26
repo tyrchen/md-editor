@@ -32,7 +32,7 @@ use commands::TableOperationsCommand;
 pub use transaction::Transaction;
 
 use crate::error::EditError;
-use crate::{Document, ListType, Node, TableAlignment, TextFormatting};
+use crate::{Document, ListType, Node, TableAlignment, TableProperties, TextFormatting};
 
 // Define an alias for the Command trait to avoid conflicts
 use command::Command as EditorCommand;
@@ -393,20 +393,17 @@ impl Editor {
     /// - `position`: The position in the document where the table should be inserted
     /// - `columns`: The number of columns in the table
     /// - `rows`: The number of rows in the table (not including header)
-    /// - `with_header`: Whether to include a header row
     pub fn create_table(
         &mut self,
         position: usize,
         columns: usize,
         rows: usize,
-        with_header: bool,
     ) -> Result<(), EditError> {
         let command = Box::new(CreateTableCommand::new(
             self.document.clone(),
             position,
             columns,
             rows,
-            with_header,
         ));
         self.execute_command(command)
     }
@@ -416,14 +413,12 @@ impl Editor {
     /// - `position`: The position in the document where the table should be inserted
     /// - `columns`: The number of columns in the table
     /// - `rows`: The number of rows in the table (not including header)
-    /// - `with_header`: Whether to include a header row
-    /// - `alignments`: Column alignment specifications
+    /// - `alignments`: Column alignments (one per column)
     pub fn create_table_with_alignments(
         &mut self,
         position: usize,
         columns: usize,
         rows: usize,
-        with_header: bool,
         alignments: Vec<TableAlignment>,
     ) -> Result<(), EditError> {
         let command = Box::new(CreateTableCommand::with_alignments(
@@ -431,7 +426,6 @@ impl Editor {
             position,
             columns,
             rows,
-            with_header,
             alignments,
         ));
         self.execute_command(command)
@@ -440,22 +434,71 @@ impl Editor {
     /// Create a table with predefined data
     ///
     /// - `position`: The position in the document where the table should be inserted
-    /// - `data`: Table data (rows of cells)
-    /// - `with_header`: Whether the first row should be treated as a header
-    /// - `alignments`: Optional column alignment specifications
+    /// - `header`: Header row cells
+    /// - `rows`: Table data (rows of cells)
+    /// - `alignments`: Optional column alignments
     pub fn create_table_with_data(
         &mut self,
         position: usize,
-        data: Vec<Vec<String>>,
-        with_header: bool,
+        header: Vec<String>,
+        rows: Vec<Vec<String>>,
         alignments: Option<Vec<TableAlignment>>,
     ) -> Result<(), EditError> {
         let command = Box::new(CreateTableCommand::with_data(
             self.document.clone(),
             position,
-            data,
-            with_header,
+            header,
+            rows,
             alignments,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create a table with custom properties
+    ///
+    /// - `position`: The position in the document where the table should be inserted
+    /// - `columns`: The number of columns in the table
+    /// - `rows`: The number of rows in the table (not including header)
+    /// - `properties`: Table styling and behavior properties
+    pub fn create_table_with_properties(
+        &mut self,
+        position: usize,
+        columns: usize,
+        rows: usize,
+        properties: TableProperties,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTableCommand::with_properties(
+            self.document.clone(),
+            position,
+            columns,
+            rows,
+            properties,
+        ));
+        self.execute_command(command)
+    }
+
+    /// Create a table with predefined data and custom properties
+    ///
+    /// - `position`: The position in the document where the table should be inserted
+    /// - `header`: Header row cells
+    /// - `rows`: Table data (rows of cells)
+    /// - `alignments`: Optional column alignments
+    /// - `properties`: Table styling and behavior properties
+    pub fn create_table_with_data_and_properties(
+        &mut self,
+        position: usize,
+        header: Vec<String>,
+        rows: Vec<Vec<String>>,
+        alignments: Option<Vec<TableAlignment>>,
+        properties: TableProperties,
+    ) -> Result<(), EditError> {
+        let command = Box::new(CreateTableCommand::with_data_and_properties(
+            self.document.clone(),
+            position,
+            header,
+            rows,
+            alignments,
+            properties,
         ));
         self.execute_command(command)
     }
@@ -783,6 +826,110 @@ impl Editor {
         }
 
         Ok(())
+    }
+
+    /// Set the background color of a table cell
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row`: The row index of the cell (0 is the first row after the header)
+    /// - `column`: The column index of the cell (0 is the first column)
+    /// - `color`: The background color in hex format (e.g., "#f5f5f5")
+    /// - `is_header`: Whether to modify a header cell or a body cell
+    pub fn set_table_cell_background(
+        &mut self,
+        node_index: usize,
+        row: usize,
+        column: usize,
+        color: impl Into<String>,
+        is_header: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetCellBackground {
+                row,
+                column,
+                color: color.into(),
+                is_header,
+            },
+        ));
+        self.execute_command(command)
+    }
+
+    /// Set custom CSS style for a table cell
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row`: The row index of the cell (0 is the first row after the header)
+    /// - `column`: The column index of the cell (0 is the first column)
+    /// - `style`: CSS style string (e.g., "font-weight: bold; color: red;")
+    /// - `is_header`: Whether to modify a header cell or a body cell
+    pub fn set_table_cell_style(
+        &mut self,
+        node_index: usize,
+        row: usize,
+        column: usize,
+        style: impl Into<String>,
+        is_header: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetCellStyle {
+                row,
+                column,
+                style: style.into(),
+                is_header,
+            },
+        ));
+        self.execute_command(command)
+    }
+
+    /// Set the spanning of a table cell
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `row`: The row index of the cell (0 is the first row after the header)
+    /// - `column`: The column index of the cell (0 is the first column)
+    /// - `colspan`: Number of columns this cell should span
+    /// - `rowspan`: Number of rows this cell should span
+    /// - `is_header`: Whether to modify a header cell or a body cell
+    pub fn set_table_cell_span(
+        &mut self,
+        node_index: usize,
+        row: usize,
+        column: usize,
+        colspan: u32,
+        rowspan: u32,
+        is_header: bool,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetCellSpan {
+                row,
+                column,
+                colspan,
+                rowspan,
+                is_header,
+            },
+        ));
+        self.execute_command(command)
+    }
+
+    /// Set table properties
+    ///
+    /// - `node_index`: The index of the table node in the document
+    /// - `properties`: The table properties to set
+    pub fn set_table_properties(
+        &mut self,
+        node_index: usize,
+        properties: TableProperties,
+    ) -> Result<(), EditError> {
+        let command = Box::new(TableOperationsCommand::new(
+            self.document.clone(),
+            node_index,
+            TableOperation::SetTableProperties(properties),
+        ));
+        self.execute_command(command)
     }
 }
 
